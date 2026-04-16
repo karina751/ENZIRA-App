@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, Image, ScrollView, Platform, Dimensions } from 'react-native';
-import { Text, Button, IconButton, Divider } from 'react-native-paper';
+import React from 'react';
+import { View, StyleSheet, Image, ScrollView, Platform, Dimensions, Alert } from 'react-native';
+import { Text, Button, IconButton, Divider, Surface } from 'react-native-paper';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { useCart } from '../context/CartContext';
 
@@ -11,14 +11,26 @@ export const ProductDetailScreen = () => {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const { producto } = route.params;
-  const { agregarProducto } = useCart(); // Accedemos al carrito
+  
+  // FIX: Usamos addToCart que es el nombre que definimos en el CartContext
+  const { addToCart } = useCart();
 
-  const [cantidad, setCantidad] = useState(1);
-
-  // --- FIX DEL ERROR: Pasamos los 2 argumentos por separado ---
-  const manejarAgregar = () => {
-    agregarProducto(producto, cantidad); 
-    navigation.navigate('Cart');
+  const manejarAgregarAlCarrito = () => {
+    addToCart(producto);
+    
+    if (Platform.OS === 'web') {
+      // Un aviso sutil en web
+      alert(`${producto.nombre} agregado al carrito`);
+    } else {
+      Alert.alert(
+        "ENZIRA",
+        "Producto agregado con éxito",
+        [
+          { text: "Seguir comprando", style: "cancel" },
+          { text: "Ver Carrito", onPress: () => navigation.navigate('Cart') }
+        ]
+      );
+    }
   };
 
   return (
@@ -27,72 +39,46 @@ export const ProductDetailScreen = () => {
       <IconButton 
         icon="arrow-left" 
         style={styles.botonVolver} 
-        iconColor="#002147" 
-        containerColor="rgba(255,250,237,0.8)"
         onPress={() => navigation.goBack()} 
+        iconColor="#002147"
       />
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.wrapperResponsivo}>
+        <View style={esWeb ? styles.layoutWeb : styles.layoutMobile}>
           
-          {/* SECCIÓN IMAGEN */}
-          <View style={styles.seccionImagen}>
-            <Image 
-              source={{ uri: producto.imagen }} 
-              style={styles.imagenPrincipal} 
-              resizeMode={esWeb ? "contain" : "cover"} 
-            />
-          </View>
+          {/* IMAGEN DEL PRODUCTO */}
+          <Surface style={styles.contenedorImagen} elevation={1}>
+            <Image source={{ uri: producto.imagen }} style={styles.imagen} />
+          </Surface>
 
-          {/* SECCIÓN DETALLES */}
-          <View style={styles.seccionInfo}>
-            <Text style={styles.categoriaLabel}>{producto.categoria?.toUpperCase() || 'COLECCIÓN EXCLUSIVA'}</Text>
-            <Text style={styles.titulo}>{producto.nombre.toUpperCase()}</Text>
+          {/* INFORMACIÓN Y COMPRA */}
+          <View style={styles.infoContainer}>
+            <Text style={styles.categoria}>{producto.categoria.toUpperCase()}</Text>
+            <Text style={styles.nombre}>{producto.nombre.toUpperCase()}</Text>
+            <View style={styles.lineaDecorativa} />
+            
             <Text style={styles.precio}>${producto.precio}</Text>
             
-            {producto.cuotas && (
-              <Text style={styles.cuotasText}>💳 {producto.cuotas}</Text>
-            )}
+            <Text style={styles.descripcion}>
+              {producto.descripcion || "Diseño exclusivo de la colección ENZIRA Alta Costura. Confeccionado con los mejores materiales para garantizar durabilidad y elegancia en cada detalle."}
+            </Text>
 
             <Divider style={styles.divider} />
 
-            <View style={styles.filaStock}>
-              <Text style={styles.disponibilidad}>
-                Disponibilidad: <Text style={{fontWeight: 'bold'}}>{producto.stock} unidades</Text>
-              </Text>
-            </View>
-
-            <Text style={styles.labelCantidad}>CANTIDAD:</Text>
-            <View style={styles.selectorCantidad}>
-              <IconButton 
-                icon="minus" 
-                onPress={() => cantidad > 1 && setCantidad(cantidad - 1)} 
-                disabled={cantidad <= 1}
-              />
-              <Text style={styles.cantidadNumero}>{cantidad}</Text>
-              <IconButton 
-                icon="plus" 
-                onPress={() => cantidad < producto.stock && setCantidad(cantidad + 1)} 
-                disabled={cantidad >= producto.stock}
-              />
-            </View>
-
-            <Button 
-              mode="contained" 
-              onPress={manejarAgregar}
-              style={styles.botonCompra}
+            <Button
+              mode="contained"
+              onPress={manejarAgregarAlCarrito}
+              style={styles.botonAgregar}
               buttonColor="#002147"
-              textColor="#FFFAED"
               labelStyle={styles.labelBoton}
+              icon="cart-plus"
             >
               AÑADIR AL CARRITO
             </Button>
 
-            <View style={styles.cajaDescripcion}>
-              <Text style={styles.tituloDesc}>DESCRIPCIÓN</Text>
-              <Text style={styles.cuerpoDesc}>
-                Producto exclusivo de la colección ENZIRA. Diseñado con materiales de alta calidad y terminaciones artesanales de Salta. Ideal para llevar tu mundo con vos en cada ocasión.
-              </Text>
+            <View style={styles.detallesEnvio}>
+              <Text style={styles.envioTexto}>✨ Envío exclusivo a todo el país</Text>
+              <Text style={styles.envioTexto}>✨ Calidad Garantizada ENZIRA</Text>
             </View>
           </View>
 
@@ -103,51 +89,97 @@ export const ProductDetailScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFAED' },
-  scrollContent: { flexGrow: 1, paddingVertical: esWeb ? 40 : 0 },
-  wrapperResponsivo: {
-    flexDirection: esWeb ? 'row' : 'column',
-    maxWidth: 1200,
-    width: '100%',
-    alignSelf: 'center',
-    backgroundColor: esWeb ? '#fff' : 'transparent',
-    elevation: esWeb ? 2 : 0,
+  container: {
+    flex: 1,
+    backgroundColor: '#FFFAED',
   },
-  botonVolver: { position: 'absolute', top: 40, left: 10, zIndex: 10 },
-  seccionImagen: {
-    flex: esWeb ? 1.2 : 0,
-    width: esWeb ? 'auto' : '100%',
-    height: esWeb ? 600 : 450,
+  botonVolver: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 20,
+    left: 10,
+    zIndex: 10,
+    backgroundColor: 'rgba(255,250,237, 0.8)',
+  },
+  scrollContent: {
+    paddingBottom: 40,
+  },
+  layoutMobile: {
+    flexDirection: 'column',
+  },
+  layoutWeb: {
+    flexDirection: 'row',
+    padding: 50,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  contenedorImagen: {
+    width: esWeb ? 500 : width,
+    height: esWeb ? 500 : width * 1.2,
     backgroundColor: '#fff',
   },
-  imagenPrincipal: { width: '100%', height: '100%' },
-  seccionInfo: {
+  imagen: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  infoContainer: {
     flex: 1,
-    padding: esWeb ? 50 : 25,
-    justifyContent: 'center',
+    padding: 30,
+    maxWidth: esWeb ? 500 : '100%',
   },
-  categoriaLabel: { color: '#CFAF68', fontSize: 12, fontWeight: 'bold', letterSpacing: 2, marginBottom: 10 },
-  titulo: { fontSize: esWeb ? 32 : 24, fontWeight: 'bold', color: '#002147', marginBottom: 10, letterSpacing: 1 },
-  precio: { fontSize: 26, color: '#002147', marginBottom: 5 },
-  cuotasText: { color: '#CFAF68', fontWeight: 'bold', fontSize: 14, marginBottom: 20 },
-  divider: { marginVertical: 20, backgroundColor: '#002147', opacity: 0.1 },
-  filaStock: { marginBottom: 20 },
-  disponibilidad: { fontSize: 14, color: '#002147', opacity: 0.6 },
-  labelCantidad: { fontSize: 12, fontWeight: 'bold', color: '#002147', marginBottom: 10 },
-  selectorCantidad: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: '#fff', 
-    width: 140, 
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#eee',
-    marginBottom: 30
+  categoria: {
+    fontSize: 12,
+    color: '#CFAF68',
+    letterSpacing: 2,
+    fontWeight: 'bold',
+    marginBottom: 10,
   },
-  cantidadNumero: { fontSize: 18, fontWeight: 'bold', color: '#002147' },
-  botonCompra: { borderRadius: 0, paddingVertical: 10 },
-  labelBoton: { fontWeight: 'bold', letterSpacing: 2, fontSize: 16 },
-  cajaDescripcion: { marginTop: 40 },
-  tituloDesc: { fontSize: 14, fontWeight: 'bold', color: '#002147', marginBottom: 10, letterSpacing: 1 },
-  cuerpoDesc: { fontSize: 14, color: '#002147', lineHeight: 22, opacity: 0.7 }
+  nombre: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#002147',
+    letterSpacing: 3,
+  },
+  lineaDecorativa: {
+    width: 40,
+    height: 2,
+    backgroundColor: '#CFAF68',
+    marginVertical: 15,
+  },
+  precio: {
+    fontSize: 24,
+    color: '#002147',
+    fontWeight: 'bold',
+    marginBottom: 20,
+  },
+  descripcion: {
+    fontSize: 14,
+    color: '#002147',
+    lineHeight: 22,
+    opacity: 0.7,
+    marginBottom: 30,
+  },
+  divider: {
+    marginBottom: 30,
+    opacity: 0.1,
+  },
+  botonAgregar: {
+    borderRadius: 0,
+    paddingVertical: 8,
+  },
+  labelBoton: {
+    fontWeight: 'bold',
+    letterSpacing: 2,
+    fontSize: 16,
+  },
+  detallesEnvio: {
+    marginTop: 30,
+  },
+  envioTexto: {
+    fontSize: 12,
+    color: '#002147',
+    opacity: 0.5,
+    marginBottom: 5,
+    fontStyle: 'italic',
+  },
 });

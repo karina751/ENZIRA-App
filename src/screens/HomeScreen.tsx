@@ -10,7 +10,7 @@ import {
   Alert, 
   Platform, 
   useWindowDimensions,
-  Dimensions // <--- ESTO ES LO QUE FALTABA
+  Dimensions 
 } from 'react-native';
 import { Text, IconButton, TextInput, Divider, Badge } from 'react-native-paper';
 import { useNavigation, useRoute } from '@react-navigation/native'; 
@@ -37,19 +37,15 @@ export const HomeScreen = () => {
   const [usuario, setUsuario] = useState<any>(null);
   const [rol, setRol] = useState<string | null>(null);
 
-  // Responsividad
   const esMobile = width < 700;
   const numColumnas = esMobile ? 2 : 4;
 
-  // 1. Escuchar categorías del Drawer (Confirmado que funciona por tu consola)
   useEffect(() => {
     if (route.params?.categoriaSeleccionada) {
-      console.log("Categoría recibida:", route.params.categoriaSeleccionada);
       setCatSeleccionada(route.params.categoriaSeleccionada);
     }
   }, [route.params?.categoriaSeleccionada, route.params?.lastUpdate]);
 
-  // 2. Auth y Roles
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       setUsuario(user);
@@ -57,7 +53,9 @@ export const HomeScreen = () => {
         const docRef = doc(db, 'usuarios', user.uid);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) setRol(docSnap.data().rol);
-      } else { setRol(null); }
+      } else { 
+        setRol(null); 
+      }
     });
     return unsub; 
   }, []);
@@ -76,7 +74,6 @@ export const HomeScreen = () => {
 
   useEffect(() => { obtenerProductos(); }, []);
 
-  // 3. Filtrado de la lista
   useEffect(() => {
     let filtrados = productos;
     if (catSeleccionada !== 'Todas') {
@@ -107,8 +104,15 @@ export const HomeScreen = () => {
     <View style={styles.headerContainer}>
       <View style={styles.logoRow}>
         <Text style={styles.logoText}>ENZIRA</Text>
+        
+        {/* FIX: Lógica de saludo exclusivo para Mariel */}
         <Text style={styles.sloganText}>
-          {catSeleccionada === 'Todas' ? '✨ LLEVA TU MUNDO CON VOS ✨' : `COLECCIÓN ${catSeleccionada.toUpperCase()}`}
+          {usuario && rol === 'admin' 
+            ? '✨ BIENVENIDA MARIEL - GESTIÓN DIRECTIVA ✨' 
+            : catSeleccionada === 'Todas' 
+              ? '✨ LLEVA TU MUNDO CON VOS ✨' 
+              : `COLECCIÓN ${catSeleccionada.toUpperCase()}`
+          }
         </Text>
       </View>
 
@@ -135,8 +139,17 @@ export const HomeScreen = () => {
             <IconButton icon="cart" iconColor="#002147" onPress={() => navigation.navigate('Cart')} />
             {totalItems > 0 ? <Badge style={styles.badgeEstilo} size={14}>{totalItems}</Badge> : null}
           </View>
-          <IconButton icon="briefcase-outline" iconColor={rol === 'admin' ? "#CFAF68" : "#002147"} onPress={manejarAccesoAdmin} />
-          <IconButton icon={usuario ? "account-check" : "account-outline"} iconColor={usuario ? "#CFAF68" : "#002147"} onPress={manejarAccesoCliente} />
+          
+          {/* FIX: El maletín solo aparece si es Admin para evitar confusiones al cliente */}
+          {rol === 'admin' && (
+            <IconButton icon="briefcase" iconColor="#CFAF68" onPress={manejarAccesoAdmin} />
+          )}
+          
+          <IconButton 
+            icon={usuario ? "account-check" : "account-outline"} 
+            iconColor={usuario ? "#CFAF68" : "#002147"} 
+            onPress={manejarAccesoCliente} 
+          />
         </View>
       </View>
       <Divider style={{ backgroundColor: '#CFAF68', opacity: 0.1 }} />
@@ -177,7 +190,7 @@ export const HomeScreen = () => {
                   <Image 
                     source={{ uri: item.imagen }} 
                     style={styles.imagenTarjeta} 
-                    resizeMode="cover" // Lo sacamos de style y lo pusimos como prop para evitar el warning
+                    resizeMode="cover" 
                   />
                 </View>
                 <View style={styles.contenidoTarjeta}>
@@ -207,20 +220,8 @@ const styles = StyleSheet.create({
   leftActions: { flexDirection: 'row' },
   rightActions: { flexDirection: 'row' },
   inputBusqueda: { flex: 1, height: 40, backgroundColor: 'transparent', fontSize: 13, marginHorizontal: 10 },
-  
-  filaGrilla: { 
-    justifyContent: 'flex-start', 
-    paddingHorizontal: 10, 
-    marginTop: 15 
-  }, 
-  tarjeta: { 
-    // Usamos Dimensions ahora que está importado para el cálculo en Web
-    marginHorizontal: '1%',
-    marginBottom: 25, 
-    backgroundColor: '#fff', 
-    overflow: 'hidden' 
-  },
-  
+  filaGrilla: { justifyContent: 'flex-start', paddingHorizontal: 10, marginTop: 15 }, 
+  tarjeta: { marginHorizontal: '1%', marginBottom: 25, backgroundColor: '#fff', overflow: 'hidden' },
   contenedorImagen: { width: '100%', height: 250, backgroundColor: '#f9f9f9' },
   imagenTarjeta: { width: '100%', height: '100%' },
   contenidoTarjeta: { padding: 10, alignItems: 'center' },
