@@ -7,22 +7,21 @@ import {
   Image, 
   TouchableOpacity, 
   Linking, 
-  Alert, 
   Platform, 
   useWindowDimensions 
 } from 'react-native';
-import { Text, IconButton, TextInput, Divider, Badge } from 'react-native-paper';
+import { Text, IconButton, TextInput, Divider, Badge, Portal, Dialog, Button } from 'react-native-paper'; // <--- AGREGAMOS PORTAL Y DIALOG
 import { useNavigation, useRoute } from '@react-navigation/native'; 
 
-// Firebase, Carrito y EL NUEVO TEMA
+// Firebase, Carrito y Tema
 import { collection, getDocs, query, orderBy, doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { useCart } from '../context/CartContext';
-import { useAppTheme } from '../context/ThemeContext'; // <--- IMPORTANTE
+import { useAppTheme } from '../context/ThemeContext';
 
 export const HomeScreen = () => {
-  const { theme } = useAppTheme(); // <--- TRAEMOS LOS COLORES MÁGICOS
+  const { theme } = useAppTheme(); 
   const navigation = useNavigation<any>(); 
   const route = useRoute<any>();
   const { totalItems } = useCart();
@@ -37,11 +36,13 @@ export const HomeScreen = () => {
   const [mostrarBuscador, setMostrarBuscador] = useState(false);
   const [usuario, setUsuario] = useState<any>(null);
   const [rol, setRol] = useState<string | null>(null);
+  
+  // NUEVO: Estado para controlar el diálogo de cerrar sesión
+  const [mostrarDialog, setMostrarDialog] = useState(false);
 
   const esMobile = width < 700;
   const numColumnas = esMobile ? 2 : 4;
 
-  // Lógica de carga de datos (se mantiene igual)
   useEffect(() => {
     if (route.params?.categoriaSeleccionada) {
       setCatSeleccionada(route.params.categoriaSeleccionada);
@@ -85,13 +86,12 @@ export const HomeScreen = () => {
     setProductosFiltrados(filtrados);
   }, [searchQuery, catSeleccionada, productos]);
 
+  // CORREGIDO: Lógica de acceso con Diálogo Pro
   const manejarAccesoCliente = () => {
-    if (!usuario) { navigation.navigate('Login'); return; }
-    const mensaje = `Sesión: ${usuario.email}\n¿Deseas cerrar sesión?`;
-    if (Platform.OS === 'web') {
-        if(confirm(mensaje)) signOut(auth);
+    if (!usuario) { 
+      navigation.navigate('Login'); 
     } else {
-        Alert.alert("MI CUENTA", mensaje, [{ text: "Salir", onPress: () => signOut(auth), style: 'destructive' }, { text: "Cerrar", style: 'cancel' }]);
+      setMostrarDialog(true); // Abrimos el diálogo en lugar de usar confirm/alert
     }
   };
 
@@ -100,7 +100,6 @@ export const HomeScreen = () => {
     else { navigation.navigate('Login'); }
   };
 
-  // HEADER DINÁMICO
   const HeaderApp = () => (
     <View style={[styles.headerContainer, { backgroundColor: theme.background }]}>
       <View style={styles.logoRow}>
@@ -158,7 +157,6 @@ export const HomeScreen = () => {
     </View>
   );
 
-  // FOOTER DINÁMICO
   const FooterApp = () => (
     <View style={[styles.footerContainer, { backgroundColor: theme.background }]}>
       <Divider style={[styles.dividerFooter, { backgroundColor: theme.secondary }]} />
@@ -206,11 +204,47 @@ export const HomeScreen = () => {
           />
         )}
       </View>
+
+      {/* --- DIÁLOGO DE CIERRE DE SESIÓN (MODAL PRO) --- */}
+      <Portal>
+        <Dialog 
+          visible={mostrarDialog} 
+          onDismiss={() => setMostrarDialog(false)}
+          style={{ backgroundColor: theme.background, borderRadius: 0 }}
+        >
+          <Dialog.Title style={{ color: theme.primary, letterSpacing: 2, fontSize: 18 }}>
+            MI CUENTA
+          </Dialog.Title>
+          <Dialog.Content>
+            <Text style={{ color: theme.text, fontSize: 14 }}>
+              Sesión activa: <Text style={{ fontWeight: 'bold' }}>{usuario?.email}</Text>
+              {'\n\n'}¿Deseas cerrar tu sesión actual en ENZIRA?
+            </Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setMostrarDialog(false)} textColor={theme.primary}>
+              CANCELAR
+            </Button>
+            <Button 
+              onPress={() => {
+                setMostrarDialog(false);
+                signOut(auth);
+              }} 
+              mode="contained"
+              buttonColor={theme.primary}
+              textColor={theme.onPrimary}
+              style={{ borderRadius: 0 }}
+            >
+              CERRAR SESIÓN
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
+
     </View>
   );
 };
 
-// Mantenemos los estilos base, pero quitamos los colores que ahora son dinámicos
 const styles = StyleSheet.create({
   container: { flex: 1 },
   contentMaxWidth: { flex: 1, alignSelf: 'center', width: '100%' },
