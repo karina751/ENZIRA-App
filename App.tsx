@@ -1,36 +1,50 @@
+// App.tsx
 import React from 'react';
 import { MD3LightTheme, Provider as PaperProvider } from 'react-native-paper';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { CartProvider } from './src/context/CartContext'; 
+import { ThemeProvider, useAppTheme } from './src/context/ThemeContext'; // Importamos lo nuevo
 
-// 1. CREAMOS EL TEMA DE ENZIRA
-const enziraTheme = {
-  ...MD3LightTheme,
-  colors: {
-    ...MD3LightTheme.colors,
-    primary: '#002147',      // Azul Marino (Botones, Header)
-    secondary: '#CFAF68',    // Dorado (Acentos)
-    background: '#FFFAED',   // Crema (Fondo de la app)
-    surface: '#FFFAED',      // Crema (Para que las tarjetas no resalten como bloques)
-    text: '#002147',         // Textos principales
-    elevation: {
-      level0: 'transparent',
-      level1: 'transparent', // Apagamos las sombras para hacer un diseño "Flat" elegante
-      level2: 'transparent',
-      level3: 'transparent',
-      level4: 'transparent',
-      level5: 'transparent',
-    }
-  },
-};
+// Creamos un componente "Main" para poder usar el hook useAppTheme
+function Main() {
+  const { theme } = useAppTheme(); // ¡Acá recibimos los colores de Firebase!
 
-export default function App() {
+  // Combinamos el MD3LightTheme con los colores de la estación actual
+  const dynamicTheme = {
+    ...MD3LightTheme,
+    colors: {
+      ...MD3LightTheme.colors,
+      primary: theme.primary,
+      secondary: theme.secondary,
+      background: theme.background,
+      surface: theme.background, // Usamos el fondo de la estación
+      text: theme.text,
+      // Mantenemos tu estilo de elevación flat
+      elevation: {
+        level0: 'transparent',
+        level1: 'transparent',
+        level2: 'transparent',
+        level3: 'transparent',
+        level4: 'transparent',
+        level5: 'transparent',
+      }
+    },
+  };
+
   return (
     <CartProvider>
-      {/* 2. LE PASAMOS EL TEMA A LA APP */}
-      <PaperProvider theme={enziraTheme}>
+      <PaperProvider theme={dynamicTheme}>
         <AppNavigator />
       </PaperProvider>
     </CartProvider>
+  );
+}
+
+// El componente principal solo envuelve a Main con el ThemeProvider
+export default function App() {
+  return (
+    <ThemeProvider>
+      <Main />
+    </ThemeProvider>
   );
 }
