@@ -10,7 +10,7 @@ import {
   Platform, 
   useWindowDimensions 
 } from 'react-native';
-import { Text, IconButton, TextInput, Divider, Badge, Portal, Dialog, Button } from 'react-native-paper'; // <--- AGREGAMOS PORTAL Y DIALOG
+import { Text, IconButton, TextInput, Divider, Badge, Portal, Dialog, Button } from 'react-native-paper';
 import { useNavigation, useRoute } from '@react-navigation/native'; 
 
 // Firebase, Carrito y Tema
@@ -36,13 +36,12 @@ export const HomeScreen = () => {
   const [mostrarBuscador, setMostrarBuscador] = useState(false);
   const [usuario, setUsuario] = useState<any>(null);
   const [rol, setRol] = useState<string | null>(null);
-  
-  // NUEVO: Estado para controlar el diálogo de cerrar sesión
   const [mostrarDialog, setMostrarDialog] = useState(false);
 
   const esMobile = width < 700;
   const numColumnas = esMobile ? 2 : 4;
 
+  // Lógica de carga
   useEffect(() => {
     if (route.params?.categoriaSeleccionada) {
       setCatSeleccionada(route.params.categoriaSeleccionada);
@@ -86,77 +85,15 @@ export const HomeScreen = () => {
     setProductosFiltrados(filtrados);
   }, [searchQuery, catSeleccionada, productos]);
 
-  // CORREGIDO: Lógica de acceso con Diálogo Pro
   const manejarAccesoCliente = () => {
     if (!usuario) { 
       navigation.navigate('Login'); 
     } else {
-      setMostrarDialog(true); // Abrimos el diálogo en lugar de usar confirm/alert
+      setMostrarDialog(true);
     }
   };
 
-  const manejarAccesoAdmin = () => {
-    if (usuario && rol === 'admin') { navigation.navigate('Admin'); }
-    else { navigation.navigate('Login'); }
-  };
-
-  const HeaderApp = () => (
-    <View style={[styles.headerContainer, { backgroundColor: theme.background }]}>
-      <View style={styles.logoRow}>
-        <Text style={[styles.logoText, { color: theme.primary }]}>ENZIRA</Text>
-        <Text style={[styles.sloganText, { color: theme.secondary }]}>
-          {usuario && rol === 'admin' 
-            ? '✨ BIENVENIDA MARIEL - GESTIÓN DIRECTIVA ✨' 
-            : catSeleccionada === 'Todas' 
-              ? '✨ LLEVA TU MUNDO CON VOS ✨' 
-              : `COLECCIÓN ${catSeleccionada.toUpperCase()}`
-          }
-        </Text>
-      </View>
-
-      <View style={styles.actionRow}>
-        <View style={styles.leftActions}>
-          <IconButton icon="menu" iconColor={theme.primary} onPress={() => navigation.openDrawer()} />
-          <IconButton icon="magnify" iconColor={theme.primary} onPress={() => setMostrarBuscador(!mostrarBuscador)} />
-        </View>
-
-        {mostrarBuscador && (
-          <TextInput
-            placeholder="Buscar..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            mode="flat"
-            style={[styles.inputBusqueda, { color: theme.text }]}
-            autoFocus
-            activeUnderlineColor={theme.secondary}
-          />
-        )}
-
-        <View style={styles.rightActions}>
-          <View>
-            <IconButton icon="cart" iconColor={theme.primary} onPress={() => navigation.navigate('Cart')} />
-            {totalItems > 0 ? (
-              <Badge style={[styles.badgeEstilo, { backgroundColor: theme.secondary, color: theme.primary }]} size={14}>
-                {totalItems}
-              </Badge>
-            ) : null}
-          </View>
-          
-          {rol === 'admin' && (
-            <IconButton icon="briefcase" iconColor={theme.secondary} onPress={manejarAccesoAdmin} />
-          )}
-          
-          <IconButton 
-            icon={usuario ? "account-check" : "account-outline"} 
-            iconColor={usuario ? theme.secondary : theme.primary} 
-            onPress={manejarAccesoCliente} 
-          />
-        </View>
-      </View>
-      <Divider style={{ backgroundColor: theme.secondary, opacity: 0.2 }} />
-    </View>
-  );
-
+  // Footer se puede quedar como función porque no tiene inputs
   const FooterApp = () => (
     <View style={[styles.footerContainer, { backgroundColor: theme.background }]}>
       <Divider style={[styles.dividerFooter, { backgroundColor: theme.secondary }]} />
@@ -176,7 +113,64 @@ export const HomeScreen = () => {
           <ActivityIndicator size="large" color={theme.primary} style={{ flex: 1, marginTop: 50 }} />
         ) : (
           <FlatList 
-            ListHeaderComponent={HeaderApp} 
+            // FIX: Pasamos el JSX directo para evitar que el buscador pierda el foco
+            ListHeaderComponent={
+              <View style={[styles.headerContainer, { backgroundColor: theme.background }]}>
+                <View style={styles.logoRow}>
+                  <Text style={[styles.logoText, { color: theme.primary }]}>ENZIRA</Text>
+                  <Text style={[styles.sloganText, { color: theme.secondary }]}>
+                    {usuario && rol === 'admin' 
+                      ? '✨ BIENVENIDA MARIEL - GESTIÓN DIRECTIVA ✨' 
+                      : catSeleccionada === 'Todas' 
+                        ? '✨ LLEVA TU MUNDO CON VOS ✨' 
+                        : `COLECCIÓN ${catSeleccionada.toUpperCase()}`
+                    }
+                  </Text>
+                </View>
+
+                <View style={styles.actionRow}>
+                  <View style={styles.leftActions}>
+                    <IconButton icon="menu" iconColor={theme.primary} onPress={() => navigation.openDrawer()} />
+                    <IconButton icon="magnify" iconColor={theme.primary} onPress={() => setMostrarBuscador(!mostrarBuscador)} />
+                  </View>
+
+                  {mostrarBuscador && (
+                    <TextInput
+                      placeholder="Buscar..."
+                      value={searchQuery}
+                      onChangeText={setSearchQuery}
+                      mode="flat"
+                      style={styles.inputBusqueda}
+                      textColor={theme.text}
+                      autoFocus
+                      activeUnderlineColor={theme.secondary}
+                    />
+                  )}
+
+                  <View style={styles.rightActions}>
+                    <View>
+                      <IconButton icon="cart" iconColor={theme.primary} onPress={() => navigation.navigate('Cart')} />
+                      {totalItems > 0 && (
+                        <Badge style={[styles.badgeEstilo, { backgroundColor: theme.secondary, color: theme.primary }]} size={14}>
+                          {totalItems}
+                        </Badge>
+                      )}
+                    </View>
+                    
+                    {rol === 'admin' && (
+                      <IconButton icon="briefcase" iconColor={theme.secondary} onPress={() => navigation.navigate('Admin')} />
+                    )}
+                    
+                    <IconButton 
+                      icon={usuario ? "account-check" : "account-outline"} 
+                      iconColor={usuario ? theme.secondary : theme.primary} 
+                      onPress={manejarAccesoCliente} 
+                    />
+                  </View>
+                </View>
+                <Divider style={{ backgroundColor: theme.secondary, opacity: 0.2 }} />
+              </View>
+            } 
             data={productosFiltrados} 
             keyExtractor={(item) => item.id} 
             numColumns={numColumnas} 
@@ -205,42 +199,19 @@ export const HomeScreen = () => {
         )}
       </View>
 
-      {/* --- DIÁLOGO DE CIERRE DE SESIÓN (MODAL PRO) --- */}
+      {/* DIÁLOGO PRO */}
       <Portal>
-        <Dialog 
-          visible={mostrarDialog} 
-          onDismiss={() => setMostrarDialog(false)}
-          style={{ backgroundColor: theme.background, borderRadius: 0 }}
-        >
-          <Dialog.Title style={{ color: theme.primary, letterSpacing: 2, fontSize: 18 }}>
-            MI CUENTA
-          </Dialog.Title>
+        <Dialog visible={mostrarDialog} onDismiss={() => setMostrarDialog(false)} style={{ backgroundColor: theme.background, borderRadius: 0 }}>
+          <Dialog.Title style={{ color: theme.primary, letterSpacing: 2 }}>MI CUENTA</Dialog.Title>
           <Dialog.Content>
-            <Text style={{ color: theme.text, fontSize: 14 }}>
-              Sesión activa: <Text style={{ fontWeight: 'bold' }}>{usuario?.email}</Text>
-              {'\n\n'}¿Deseas cerrar tu sesión actual en ENZIRA?
-            </Text>
+            <Text style={{ color: theme.text }}>¿Deseas cerrar tu sesión actual en ENZIRA?</Text>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setMostrarDialog(false)} textColor={theme.primary}>
-              CANCELAR
-            </Button>
-            <Button 
-              onPress={() => {
-                setMostrarDialog(false);
-                signOut(auth);
-              }} 
-              mode="contained"
-              buttonColor={theme.primary}
-              textColor={theme.onPrimary}
-              style={{ borderRadius: 0 }}
-            >
-              CERRAR SESIÓN
-            </Button>
+            <Button onPress={() => setMostrarDialog(false)} textColor={theme.primary}>CANCELAR</Button>
+            <Button onPress={() => { setMostrarDialog(false); signOut(auth); }} mode="contained" buttonColor={theme.primary} textColor={theme.onPrimary}>CERRAR SESIÓN</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
-
     </View>
   );
 };
@@ -255,7 +226,7 @@ const styles = StyleSheet.create({
   actionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 10, height: 60 },
   leftActions: { flexDirection: 'row' },
   rightActions: { flexDirection: 'row' },
-  inputBusqueda: { flex: 1, height: 40, backgroundColor: 'transparent', fontSize: 13, marginHorizontal: 10 },
+  inputBusqueda: { flex: 1, height: 45, backgroundColor: 'transparent', fontSize: 14, marginHorizontal: 5 },
   filaGrilla: { justifyContent: 'flex-start', paddingHorizontal: 10, marginTop: 15 }, 
   tarjeta: { marginHorizontal: '1%', marginBottom: 25, overflow: 'hidden', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' },
   contenedorImagen: { width: '100%', height: 250, backgroundColor: 'rgba(0,0,0,0.02)' },
