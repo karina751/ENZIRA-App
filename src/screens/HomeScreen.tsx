@@ -9,19 +9,20 @@ import {
   Linking, 
   Alert, 
   Platform, 
-  useWindowDimensions,
-  Dimensions 
+  useWindowDimensions 
 } from 'react-native';
 import { Text, IconButton, TextInput, Divider, Badge } from 'react-native-paper';
 import { useNavigation, useRoute } from '@react-navigation/native'; 
 
-// Firebase y Carrito
+// Firebase, Carrito y EL NUEVO TEMA
 import { collection, getDocs, query, orderBy, doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { useCart } from '../context/CartContext';
+import { useAppTheme } from '../context/ThemeContext'; // <--- IMPORTANTE
 
 export const HomeScreen = () => {
+  const { theme } = useAppTheme(); // <--- TRAEMOS LOS COLORES MÁGICOS
   const navigation = useNavigation<any>(); 
   const route = useRoute<any>();
   const { totalItems } = useCart();
@@ -40,6 +41,7 @@ export const HomeScreen = () => {
   const esMobile = width < 700;
   const numColumnas = esMobile ? 2 : 4;
 
+  // Lógica de carga de datos (se mantiene igual)
   useEffect(() => {
     if (route.params?.categoriaSeleccionada) {
       setCatSeleccionada(route.params.categoriaSeleccionada);
@@ -53,9 +55,7 @@ export const HomeScreen = () => {
         const docRef = doc(db, 'usuarios', user.uid);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) setRol(docSnap.data().rol);
-      } else { 
-        setRol(null); 
-      }
+      } else { setRol(null); }
     });
     return unsub; 
   }, []);
@@ -100,13 +100,12 @@ export const HomeScreen = () => {
     else { navigation.navigate('Login'); }
   };
 
+  // HEADER DINÁMICO
   const HeaderApp = () => (
-    <View style={styles.headerContainer}>
+    <View style={[styles.headerContainer, { backgroundColor: theme.background }]}>
       <View style={styles.logoRow}>
-        <Text style={styles.logoText}>ENZIRA</Text>
-        
-        {/* FIX: Lógica de saludo exclusivo para Mariel */}
-        <Text style={styles.sloganText}>
+        <Text style={[styles.logoText, { color: theme.primary }]}>ENZIRA</Text>
+        <Text style={[styles.sloganText, { color: theme.secondary }]}>
           {usuario && rol === 'admin' 
             ? '✨ BIENVENIDA MARIEL - GESTIÓN DIRECTIVA ✨' 
             : catSeleccionada === 'Todas' 
@@ -118,8 +117,8 @@ export const HomeScreen = () => {
 
       <View style={styles.actionRow}>
         <View style={styles.leftActions}>
-          <IconButton icon="menu" iconColor="#002147" onPress={() => navigation.openDrawer()} />
-          <IconButton icon="magnify" iconColor="#002147" onPress={() => setMostrarBuscador(!mostrarBuscador)} />
+          <IconButton icon="menu" iconColor={theme.primary} onPress={() => navigation.openDrawer()} />
+          <IconButton icon="magnify" iconColor={theme.primary} onPress={() => setMostrarBuscador(!mostrarBuscador)} />
         </View>
 
         {mostrarBuscador && (
@@ -128,51 +127,55 @@ export const HomeScreen = () => {
             value={searchQuery}
             onChangeText={setSearchQuery}
             mode="flat"
-            style={styles.inputBusqueda}
+            style={[styles.inputBusqueda, { color: theme.text }]}
             autoFocus
-            activeUnderlineColor="#CFAF68"
+            activeUnderlineColor={theme.secondary}
           />
         )}
 
         <View style={styles.rightActions}>
           <View>
-            <IconButton icon="cart" iconColor="#002147" onPress={() => navigation.navigate('Cart')} />
-            {totalItems > 0 ? <Badge style={styles.badgeEstilo} size={14}>{totalItems}</Badge> : null}
+            <IconButton icon="cart" iconColor={theme.primary} onPress={() => navigation.navigate('Cart')} />
+            {totalItems > 0 ? (
+              <Badge style={[styles.badgeEstilo, { backgroundColor: theme.secondary, color: theme.primary }]} size={14}>
+                {totalItems}
+              </Badge>
+            ) : null}
           </View>
           
-          {/* FIX: El maletín solo aparece si es Admin para evitar confusiones al cliente */}
           {rol === 'admin' && (
-            <IconButton icon="briefcase" iconColor="#CFAF68" onPress={manejarAccesoAdmin} />
+            <IconButton icon="briefcase" iconColor={theme.secondary} onPress={manejarAccesoAdmin} />
           )}
           
           <IconButton 
             icon={usuario ? "account-check" : "account-outline"} 
-            iconColor={usuario ? "#CFAF68" : "#002147"} 
+            iconColor={usuario ? theme.secondary : theme.primary} 
             onPress={manejarAccesoCliente} 
           />
         </View>
       </View>
-      <Divider style={{ backgroundColor: '#CFAF68', opacity: 0.1 }} />
+      <Divider style={{ backgroundColor: theme.secondary, opacity: 0.2 }} />
     </View>
   );
 
+  // FOOTER DINÁMICO
   const FooterApp = () => (
-    <View style={styles.footerContainer}>
-      <Divider style={styles.dividerFooter} />
-      <Text style={styles.footerTitulo}>ENZIRA - ALTA COSTURA</Text>
+    <View style={[styles.footerContainer, { backgroundColor: theme.background }]}>
+      <Divider style={[styles.dividerFooter, { backgroundColor: theme.secondary }]} />
+      <Text style={[styles.footerTitulo, { color: theme.primary }]}>ENZIRA - ALTA COSTURA</Text>
       <View style={styles.socialIcons}>
-        <IconButton icon="instagram" iconColor="#002147" onPress={() => Linking.openURL('https://www.instagram.com/enzira.bags')} />
+        <IconButton icon="instagram" iconColor={theme.primary} onPress={() => Linking.openURL('https://www.instagram.com/enzira.bags')} />
         <IconButton icon="whatsapp" iconColor="#25D366" onPress={() => Linking.openURL('https://wa.me/5493875222620')} />
       </View>
-      <Text style={styles.copyright}>© 2026 ENZIRA</Text>
+      <Text style={[styles.copyright, { color: theme.primary }]}>© 2026 ENZIRA</Text>
     </View>
   );
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
       <View style={[styles.contentMaxWidth, { maxWidth: width > 1200 ? 1200 : '100%' }]}>
         {cargando ? (
-          <ActivityIndicator size="large" color="#002147" style={{ flex: 1, marginTop: 50 }} />
+          <ActivityIndicator size="large" color={theme.primary} style={{ flex: 1, marginTop: 50 }} />
         ) : (
           <FlatList 
             ListHeaderComponent={HeaderApp} 
@@ -183,25 +186,23 @@ export const HomeScreen = () => {
             columnWrapperStyle={styles.filaGrilla} 
             renderItem={({ item }) => (
               <TouchableOpacity 
-                style={[styles.tarjeta, { width: esMobile ? '48%' : '23%' }]} 
+                style={[styles.tarjeta, { width: esMobile ? '48%' : '23%', backgroundColor: theme.background }]} 
                 onPress={() => navigation.navigate('ProductDetail', { producto: item })}
               >
                 <View style={styles.contenedorImagen}>
-                  <Image 
-                    source={{ uri: item.imagen }} 
-                    style={styles.imagenTarjeta} 
-                    resizeMode="cover" 
-                  />
+                  <Image source={{ uri: item.imagen }} style={styles.imagenTarjeta} resizeMode="cover" />
                 </View>
                 <View style={styles.contenidoTarjeta}>
-                  <Text style={styles.nombreProducto} numberOfLines={1}>{item.nombre.toUpperCase()}</Text>
-                  <Text style={styles.precio}>${item.precio}</Text>
+                  <Text style={[styles.nombreProducto, { color: theme.text }]} numberOfLines={1}>
+                    {item.nombre.toUpperCase()}
+                  </Text>
+                  <Text style={[styles.precio, { color: theme.text }]}>${item.precio}</Text>
                 </View>
               </TouchableOpacity>
             )}
             ListFooterComponent={FooterApp}
             showsVerticalScrollIndicator={false}
-            ListEmptyComponent={<Text style={styles.vacio}>No hay productos disponibles.</Text>}
+            ListEmptyComponent={<Text style={[styles.vacio, { color: theme.text }]}>No hay productos disponibles.</Text>}
           />
         )}
       </View>
@@ -209,29 +210,30 @@ export const HomeScreen = () => {
   );
 };
 
+// Mantenemos los estilos base, pero quitamos los colores que ahora son dinámicos
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFAED' },
+  container: { flex: 1 },
   contentMaxWidth: { flex: 1, alignSelf: 'center', width: '100%' },
-  headerContainer: { backgroundColor: '#FFFAED', paddingTop: 20 },
+  headerContainer: { paddingTop: 20 },
   logoRow: { alignItems: 'center', marginBottom: 15 },
-  logoText: { fontSize: Platform.OS === 'web' ? 52 : 42, fontWeight: 'bold', color: '#002147', letterSpacing: 8 },
-  sloganText: { fontSize: 10, color: '#CFAF68', letterSpacing: 3, fontWeight: 'bold', marginTop: 5 },
+  logoText: { fontSize: Platform.OS === 'web' ? 52 : 42, fontWeight: 'bold', letterSpacing: 8 },
+  sloganText: { fontSize: 10, letterSpacing: 3, fontWeight: 'bold', marginTop: 5 },
   actionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 10, height: 60 },
   leftActions: { flexDirection: 'row' },
   rightActions: { flexDirection: 'row' },
   inputBusqueda: { flex: 1, height: 40, backgroundColor: 'transparent', fontSize: 13, marginHorizontal: 10 },
   filaGrilla: { justifyContent: 'flex-start', paddingHorizontal: 10, marginTop: 15 }, 
-  tarjeta: { marginHorizontal: '1%', marginBottom: 25, backgroundColor: '#fff', overflow: 'hidden' },
-  contenedorImagen: { width: '100%', height: 250, backgroundColor: '#f9f9f9' },
+  tarjeta: { marginHorizontal: '1%', marginBottom: 25, overflow: 'hidden', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' },
+  contenedorImagen: { width: '100%', height: 250, backgroundColor: 'rgba(0,0,0,0.02)' },
   imagenTarjeta: { width: '100%', height: '100%' },
   contenidoTarjeta: { padding: 10, alignItems: 'center' },
-  nombreProducto: { color: '#002147', fontSize: 11, fontWeight: 'bold' },
-  precio: { color: '#002147', fontSize: 13, marginTop: 4 },
-  badgeEstilo: { position: 'absolute', top: 5, right: 5, backgroundColor: '#CFAF68', color: '#002147' },
-  footerContainer: { padding: 40, alignItems: 'center', backgroundColor: '#FFFAED' },
-  dividerFooter: { width: '40%', marginBottom: 15, backgroundColor: '#CFAF68', opacity: 0.3 },
-  footerTitulo: { color: '#002147', fontWeight: 'bold', letterSpacing: 1, fontSize: 10 },
+  nombreProducto: { fontSize: 11, fontWeight: 'bold' },
+  precio: { fontSize: 13, marginTop: 4 },
+  badgeEstilo: { position: 'absolute', top: 5, right: 5 },
+  footerContainer: { padding: 40, alignItems: 'center' },
+  dividerFooter: { width: '40%', marginBottom: 15, opacity: 0.3 },
+  footerTitulo: { fontWeight: 'bold', letterSpacing: 1, fontSize: 10 },
   socialIcons: { flexDirection: 'row', marginVertical: 10 },
-  copyright: { fontSize: 8, color: '#002147', opacity: 0.3 },
-  vacio: { textAlign: 'center', marginTop: 50, color: '#002147', opacity: 0.5 }
+  copyright: { fontSize: 8, opacity: 0.3 },
+  vacio: { textAlign: 'center', marginTop: 50, opacity: 0.5 }
 });
