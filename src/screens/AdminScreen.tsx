@@ -7,13 +7,13 @@ import { useNavigation } from '@react-navigation/native';
 // Herramientas de Firebase y Tema
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { useAppTheme } from '../context/ThemeContext'; // <--- IMPORTANTE
+import { useAppTheme } from '../context/ThemeContext'; 
 
 const { width } = Dimensions.get('window');
 
 export const AdminScreen = () => {
   const navigation = useNavigation<any>();
-  const { theme } = useAppTheme(); // <--- TRAEMOS EL TEMA DINÁMICO
+  const { theme } = useAppTheme(); 
 
   // Estados de Control
   const [vista, setVista] = useState('lista'); 
@@ -29,13 +29,13 @@ export const AdminScreen = () => {
   const [cuotas, setCuotas] = useState('');
   const [stock, setStock] = useState(''); 
   const [categoria, setCategoria] = useState('Carteras');
+  const [categoriaPersonalizada, setCategoriaPersonalizada] = useState(''); // <--- NUEVO
   const [imagen, setImagen] = useState<string | null>(null);
 
-  // --- 1. LÓGICA DE ESTACIÓN (NUEVO) ---
+  // --- 1. LÓGICA DE ESTACIÓN ---
   const [estacionActual, setEstacionActual] = useState('');
 
   useEffect(() => {
-    // Escuchamos cual es la estación actual para que el admin la muestre marcada
     const unsubTheme = onSnapshot(doc(db, 'configuracion', 'apariencia'), (docSnap) => {
       if (docSnap.exists()) setEstacionActual(docSnap.data().estacionActual);
     });
@@ -98,7 +98,17 @@ export const AdminScreen = () => {
     setPrecio(item.precio.toString());
     setCuotas(item.cuotas || '');
     setStock(item.stock ? item.stock.toString() : '0');
-    setCategoria(item.categoria || 'Carteras');
+    
+    // Si la categoría no es de las fijas, marcamos Accesorios y llenamos el personalizado
+    const fijas = ['Carteras', 'Mochilas', 'Billeteras'];
+    if (fijas.includes(item.categoria)) {
+        setCategoria(item.categoria);
+        setCategoriaPersonalizada('');
+    } else {
+        setCategoria('Accesorios');
+        setCategoriaPersonalizada(item.categoria);
+    }
+    
     setImagen(item.imagen);
     setVista('formulario'); 
   };
@@ -110,14 +120,18 @@ export const AdminScreen = () => {
     setCuotas('');
     setStock('');
     setCategoria('Carteras');
+    setCategoriaPersonalizada('');
     setImagen(null);
     setVista('lista');
     obtenerProductos();
   };
 
   const ejecutarGuardado = async () => {
-    if (!nombre || !precio || !imagen || !stock || !categoria) {
-      Alert.alert("ENZIRA", "Por favor, completá todos los campos obligatorios.");
+    // Definimos la categoría final basándonos en si es "Otros" (Accesorios)
+    const categoriaFinal = categoria === 'Accesorios' ? categoriaPersonalizada : categoria;
+
+    if (!nombre || !precio || !imagen || !stock || !categoriaFinal) {
+      Alert.alert("ENZIRA", "Por favor, completá todos los campos y definí la categoría.");
       return;
     }
     setCargando(true);
@@ -148,7 +162,7 @@ export const AdminScreen = () => {
         precio: parseFloat(precio), 
         cuotas, 
         stock: parseInt(stock), 
-        categoria, 
+        categoria: categoriaFinal, // <--- GUARDAMOS LA FINAL
         imagen: urlFinal 
       };
 
@@ -215,9 +229,6 @@ export const AdminScreen = () => {
             ]}
             theme={{ colors: { secondaryContainer: theme.secondary, onSecondaryContainer: theme.primary } }}
           />
-          <Text style={{ marginTop: 20, textAlign: 'center', fontSize: 10, color: theme.primary, opacity: 0.6, letterSpacing: 1 }}>
-            * El cambio impactará en los celulares de todos tus clientes al instante.
-          </Text>
         </Card.Content>
       </Card>
     </ScrollView>
@@ -315,16 +326,33 @@ export const AdminScreen = () => {
       <Text style={[styles.labelForm, { color: theme.primary }]}>CATEGORÍA</Text>
       <SegmentedButtons
         value={categoria}
-        onValueChange={setCategoria}
+        onValueChange={(val) => {
+            setCategoria(val);
+            if (val !== 'Accesorios') setCategoriaPersonalizada(''); // Limpiamos si no es "Otros"
+        }}
         buttons={[
-          { value: 'Carteras', label: 'Carteras' },
-          { value: 'Mochilas', label: 'Mochilas' },
-          { value: 'Billeteras', label: 'Billeteras' },
-          { value: 'Accesorios', label: 'Otros' },
+          { value: 'Carteras', label: 'Cart' },
+          { value: 'Mochilas', label: 'Moc' },
+          { value: 'Billeteras', label: 'Bill' },
+          { value: 'Accesorios', label: 'Otro' },
         ]}
-        style={{ marginBottom: 20 }}
+        style={{ marginBottom: 10 }}
         theme={{ colors: { secondaryContainer: theme.secondary, onSecondaryContainer: theme.primary } }}
       />
+
+      {/* --- CAMPO CONDICIONAL PARA NUEVA CATEGORÍA --- */}
+      {categoria === 'Accesorios' && (
+          <TextInput 
+            label="Escribí la nueva categoría" 
+            value={categoriaPersonalizada} 
+            onChangeText={setCategoriaPersonalizada} 
+            mode="outlined" 
+            style={[styles.input, { marginBottom: 20 }]} 
+            outlineColor={theme.primary} 
+            activeOutlineColor={theme.secondary}
+            placeholder="Ej: Cinturones, Pañuelos..."
+          />
+      )}
 
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
         <TextInput label="Precio" value={precio} onChangeText={setPrecio} keyboardType="numeric" mode="outlined" style={[styles.input, { width: '48%' }]} outlineColor={theme.primary} activeOutlineColor={theme.secondary} />
@@ -364,7 +392,7 @@ export const AdminScreen = () => {
             { value: 'lista', label: 'STOCK', icon: 'package-variant' },
             { value: 'formulario', label: idEdicion ? 'EDITAR' : 'NUEVO', icon: 'plus' },
             { value: 'pedidos', label: 'PEDIDOS', icon: 'bell-outline' },
-            { value: 'config', label: 'ESTILO', icon: 'palette-outline' }, // <--- NUEVA PESTAÑA
+            { value: 'config', label: 'ESTILO', icon: 'palette-outline' }, 
           ]}
           theme={{ colors: { secondaryContainer: theme.primary, onSecondaryContainer: theme.background } }}
         />
