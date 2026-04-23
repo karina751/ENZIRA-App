@@ -89,7 +89,7 @@ export const HomeScreen = () => {
     if (!usuario) { 
       navigation.navigate('Login'); 
     } else {
-      setMostrarDialog(true);
+      setMostrarDialog(true); // Si ya hay usuario, el botón de cuenta dispara el Logout
     }
   };
 
@@ -146,6 +146,7 @@ export const HomeScreen = () => {
                   )}
 
                   <View style={styles.rightActions}>
+                    {/* CARRITO */}
                     <View>
                       <IconButton icon="cart" iconColor={theme.primary} onPress={() => navigation.navigate('Cart')} />
                       {totalItems > 0 && (
@@ -154,14 +155,25 @@ export const HomeScreen = () => {
                         </Badge>
                       )}
                     </View>
+
+                    {/* MIS COMPRAS (Solo si está logueado) */}
+                    {usuario && (
+                        <IconButton 
+                          icon="receipt-text-outline" 
+                          iconColor={theme.primary} 
+                          onPress={() => navigation.navigate('Login')} 
+                        />
+                    )}
                     
+                    {/* ADMIN */}
                     {rol === 'admin' && (
                       <IconButton icon="briefcase" iconColor={theme.secondary} onPress={() => navigation.navigate('Admin')} />
                     )}
                     
+                    {/* PERSONITA / LOGOUT */}
                     <IconButton 
-                      icon={usuario ? "account-check" : "account-outline"} 
-                      iconColor={usuario ? theme.secondary : theme.primary} 
+                      icon={usuario ? "logout" : "account-outline"} 
+                      iconColor={usuario ? "#B00020" : theme.primary} 
                       onPress={manejarAccesoCliente} 
                     />
                   </View>
@@ -180,7 +192,6 @@ export const HomeScreen = () => {
                 onPress={() => navigation.navigate('ProductDetail', { producto: item })}
               >
                 <View style={styles.contenedorImagen}>
-                  {/* ✨ CAMBIO CLAVE: Mostramos la primera imagen del array (Portada) */}
                   <Image 
                     source={{ 
                         uri: (item.imagenes && item.imagenes.length > 0) 
@@ -231,7 +242,7 @@ const styles = StyleSheet.create({
   sloganText: { fontSize: 10, letterSpacing: 3, fontWeight: 'bold', marginTop: 5 },
   actionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 10, height: 60 },
   leftActions: { flexDirection: 'row' },
-  rightActions: { flexDirection: 'row' },
+  rightActions: { flexDirection: 'row', alignItems: 'center' },
   inputBusqueda: { flex: 1, height: 45, backgroundColor: 'transparent', fontSize: 14, marginHorizontal: 5 },
   filaGrilla: { justifyContent: 'flex-start', paddingHorizontal: 10, marginTop: 15 }, 
   tarjeta: { marginHorizontal: '1%', marginBottom: 25, overflow: 'hidden', borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.05)' },
