@@ -27,10 +27,11 @@ export const AdminScreen = () => {
   const [nombre, setNombre] = useState('');
   const [precio, setPrecio] = useState('');
   const [stock, setStock] = useState(''); 
-  const [descripcion, setDescripcion] = useState(''); // <--- NUEVO: Detalles técnicos
+  const [descripcion, setDescripcion] = useState('');
   const [categoria, setCategoria] = useState('Carteras');
   const [categoriaPersonalizada, setCategoriaPersonalizada] = useState('');
-  const [imagenes, setImagenes] = useState<string[]>([]); // <--- CAMBIO: Ahora es un Array
+  const [imagenes, setImagenes] = useState<string[]>([]);
+  const [fotoPrincipal, setFotoPrincipal] = useState(0); // <--- NUEVO: Índice de la foto portada
 
   // --- 1. LÓGICA DE ESTACIÓN ---
   const [estacionActual, setEstacionActual] = useState('');
@@ -85,7 +86,7 @@ export const AdminScreen = () => {
     });
 
     if (!resultado.canceled) {
-      setImagenes([...imagenes, resultado.assets[0].uri]); // Agregamos la nueva URI al array
+      setImagenes([...imagenes, resultado.assets[0].uri]);
     }
   };
 
@@ -93,9 +94,11 @@ export const AdminScreen = () => {
     const nuevaLista = [...imagenes];
     nuevaLista.splice(index, 1);
     setImagenes(nuevaLista);
+    // Si borramos la que era principal, reseteamos a la primera disponible
+    if (fotoPrincipal === index) setFotoPrincipal(0);
   };
 
-  // --- 3. LÓGICA DE GUARDADO Y CLOUDINARY (MULTI-FOTO) ---
+  // --- 3. LÓGICA DE GUARDADO CON REORDENAMIENTO ---
   const ejecutarGuardado = async () => {
     const categoriaFinal = categoria === 'Accesorios' ? categoriaPersonalizada : categoria;
 
@@ -107,10 +110,9 @@ export const AdminScreen = () => {
     setCargando(true);
 
     try {
-      // Subimos todas las fotos nuevas en paralelo
+      // 1. Subida a Cloudinary
       const urlsSubidas = await Promise.all(
         imagenes.map(async (uri) => {
-          // Si ya es una URL de Cloudinary (empieza con http), no la subimos de nuevo
           if (uri.startsWith('http')) return uri;
 
           const data = new FormData();
@@ -120,7 +122,6 @@ export const AdminScreen = () => {
           } else {
             data.append('file', { uri, type: 'image/jpeg', name: 'foto.jpg' } as any);
           }
-          
           data.append('upload_preset', 'ENZIRA-bags');
 
           const cloudRes = await fetch('https://api.cloudinary.com/v1_1/dlwoie6yt/image/upload', {
@@ -133,25 +134,30 @@ export const AdminScreen = () => {
         })
       );
 
+      // 2. ✨ TRUCO DE ANALISTA: Reordenar el array según la elección de Mariel
+      const urlsFinales = [...urlsSubidas];
+      const [fotoElegida] = urlsFinales.splice(fotoPrincipal, 1);
+      urlsFinales.unshift(fotoElegida); // La elegida ahora es la posición 0 (Portada)
+
       const payload = { 
         nombre: nombre.trim(), 
         precio: parseFloat(precio) || 0, 
         stock: parseInt(stock) || 0, 
-        descripcion: descripcion.trim(), // <--- Guardamos las características
+        descripcion: descripcion.trim(),
         categoria: categoriaFinal, 
-        imagenes: urlsSubidas // <--- Guardamos el array de URLs
+        imagenes: urlsFinales 
       };
 
       if (idEdicion) {
         await updateDoc(doc(db, 'productos', idEdicion), payload);
-        Alert.alert("ÉXITO", "Producto actualizado con sus detalles.");
+        Alert.alert("ÉXITO", "Tienda actualizada correctamente.");
       } else {
         await addDoc(collection(db, 'productos'), { ...payload, fechaCreacion: new Date().toISOString() });
-        Alert.alert("ÉXITO", "Nuevo artículo publicado con éxito.");
+        Alert.alert("ÉXITO", "Producto publicado con éxito.");
       }
       limpiarYSalir();
     } catch (e) {
-      Alert.alert("ERROR", "No se pudo procesar el lote de imágenes.");
+      Alert.alert("ERROR", "Hubo un fallo en la subida.");
     } finally {
       setCargando(false);
     }
@@ -160,7 +166,7 @@ export const AdminScreen = () => {
   const limpiarYSalir = () => {
     setIdEdicion(null); setNombre(''); setPrecio(''); setStock(''); setDescripcion('');
     setCategoria('Carteras'); setCategoriaPersonalizada(''); setImagenes([]);
-    setVista('lista'); obtenerProductos();
+    setFotoPrincipal(0); setVista('lista'); obtenerProductos();
   };
 
   return (
@@ -185,6 +191,7 @@ export const AdminScreen = () => {
         />
       </View>
 
+      {/* VISTA: LISTA DE PRODUCTOS */}
       {vista === 'lista' && (
         <FlatList
           data={productos}
@@ -201,9 +208,9 @@ export const AdminScreen = () => {
                 right={() => (
                   <IconButton icon="pencil-outline" iconColor={theme.primary} onPress={() => {
                     setIdEdicion(item.id); setNombre(item.nombre); setPrecio(item.precio.toString());
-                    setStock(item.stock?.toString() || '0'); 
-                    setDescripcion(item.descripcion || '');
-                    setImagenes(item.imagenes || [item.imagen]); // Migramos si era una sola
+                    setStock(item.stock?.toString() || '0'); setDescripcion(item.descripcion || '');
+                    setImagenes(item.imagenes || [item.imagen]);
+                    setFotoPrincipal(0); // Al editar, la 0 siempre es la portada guardada
                     if(['Carteras', 'Mochilas', 'Billeteras'].includes(item.categoria)) {
                         setCategoria(item.categoria); setCategoriaPersonalizada('');
                     } else {
@@ -218,23 +225,33 @@ export const AdminScreen = () => {
         />
       )}
 
+      {/* VISTA: FORMULARIO */}
       {vista === 'formulario' && (
         <ScrollView contentContainerStyle={styles.formContainer} keyboardShouldPersistTaps="handled">
           
-          {/* SECTOR DE MULTI-IMÁGENES */}
-          <Text style={[styles.labelForm, { color: theme.primary }]}>FOTOS DEL PRODUCTO (MÁX 3)</Text>
+          <Text style={[styles.labelForm, { color: theme.primary }]}>FOTOS (TOCÁ LA PORTADA ⭐)</Text>
           <View style={styles.multiImageContainer}>
             {imagenes.map((uri, index) => (
-              <View key={index} style={styles.wrapperImagen}>
+              <TouchableOpacity 
+                key={index} 
+                onPress={() => setFotoPrincipal(index)}
+                style={[
+                    styles.wrapperImagen, 
+                    fotoPrincipal === index && { borderColor: theme.secondary, borderWidth: 2, borderRadius: 5 }
+                ]}
+              >
                 <Image source={{ uri }} style={styles.previewChica} />
+                {fotoPrincipal === index && (
+                  <Badge size={20} style={[styles.badgeEstrella, { backgroundColor: theme.secondary }]}>⭐</Badge>
+                )}
                 <IconButton 
                     icon="close-circle" 
-                    size={20} 
+                    size={18} 
                     iconColor="red" 
                     style={styles.btnBorrarImg} 
                     onPress={() => eliminarImagenDeLista(index)} 
                 />
-              </View>
+              </TouchableOpacity>
             ))}
             {imagenes.length < 3 && (
               <TouchableOpacity onPress={seleccionarImagen} style={[styles.btnAgregarImg, { borderColor: theme.primary }]}>
@@ -245,7 +262,7 @@ export const AdminScreen = () => {
           
           <TextInput label="Nombre del Artículo" value={nombre} onChangeText={setNombre} mode="outlined" style={styles.input} outlineColor={theme.primary} />
           
-          <Text style={[styles.labelForm, { color: theme.primary }]}>CATEGORÍA</Text>
+          <Text style={[styles.labelForm, { color: theme.primary, marginTop: 10 }]}>CATEGORÍA</Text>
           <SegmentedButtons
             value={categoria}
             onValueChange={(val) => { setCategoria(val); if (val !== 'Accesorios') setCategoriaPersonalizada(''); }}
@@ -263,13 +280,12 @@ export const AdminScreen = () => {
           </View>
 
           <TextInput 
-            label="Características y Medidas" 
+            label="Detalles y Medidas" 
             value={descripcion} 
             onChangeText={setDescripcion} 
             mode="outlined" 
             multiline 
             numberOfLines={5} 
-            placeholder="Ej: Alto: 30cm, Ancho: 20cm. Interior forrado con bolsillo..."
             style={[styles.input, { height: 120 }]} 
             outlineColor={theme.primary} 
           />
@@ -281,7 +297,7 @@ export const AdminScreen = () => {
         </ScrollView>
       )}
 
-      {/* VISTAS DE CONFIG Y PEDIDOS (Sin cambios) */}
+      {/* VISTAS DE CONFIG Y PEDIDOS */}
       {vista === 'config' && (
         <ScrollView contentContainerStyle={styles.formContainer}>
           <Card style={[styles.orderCard, { borderLeftColor: theme.secondary }]}>
@@ -319,7 +335,7 @@ export const AdminScreen = () => {
       )}
 
       <Snackbar visible={snackbarVisible} onDismiss={() => setSnackbarVisible(false)} duration={2000} style={{ backgroundColor: theme.primary }}>
-        ✨ ¡Estética actualizada!
+        ✨ ¡Tienda actualizada!
       </Snackbar>
     </View>
   );
@@ -331,12 +347,13 @@ const styles = StyleSheet.create({
   tituloHeader: { fontSize: 16, fontWeight: 'bold', letterSpacing: 4 },
   formContainer: { padding: 25 },
   multiImageContainer: { flexDirection: 'row', marginBottom: 20, marginTop: 10 },
-  wrapperImagen: { position: 'relative', marginRight: 10 },
+  wrapperImagen: { position: 'relative', marginRight: 15, padding: 2 },
   previewChica: { width: 80, height: 100, borderRadius: 5 },
-  btnBorrarImg: { position: 'absolute', top: -15, right: -15 },
+  badgeEstrella: { position: 'absolute', top: -10, left: -10 },
+  btnBorrarImg: { position: 'absolute', bottom: -15, right: -15 },
   btnAgregarImg: { width: 80, height: 100, borderStyle: 'dashed', borderWidth: 1, justifyContent: 'center', alignItems: 'center', borderRadius: 5 },
   input: { marginBottom: 15, backgroundColor: '#fff' },
-  labelForm: { fontWeight: 'bold', fontSize: 11, letterSpacing: 2 },
+  labelForm: { fontWeight: 'bold', fontSize: 10, letterSpacing: 2 },
   btnMain: { paddingVertical: 8, borderRadius: 0, marginTop: 10 },
   cardItem: { backgroundColor: '#fff', marginBottom: 10, marginHorizontal: 5 },
   miniImg: { width: 50, height: 65, marginLeft: 10 },
