@@ -23,7 +23,7 @@ import {
   Surface, 
   Snackbar, 
   Portal,
-  Dialog // <--- El protagonista para la vista linda
+  Dialog 
 } from 'react-native-paper';
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
@@ -45,7 +45,7 @@ export const AdminScreen = () => {
   const [pedidos, setPedidos] = useState<any[]>([]);
   const [cargando, setCargando] = useState(false);
   
-  // --- ✨ NUEVOS ESTADOS PARA ALERTAS LINDAS ---
+  // Alertas Lindas
   const [avisoVisible, setAvisoVisible] = useState(false);
   const [avisoConfig, setAvisoConfig] = useState({ titulo: '', mensaje: '', esError: false, accion: () => {} });
 
@@ -60,7 +60,6 @@ export const AdminScreen = () => {
   const [imagenes, setImagenes] = useState<string[]>([]);
   const [fotoPrincipal, setFotoPrincipal] = useState(0); 
 
-  // --- 🛠️ FUNCIÓN PARA DISPARAR EL DIÁLOGO ELEGANTE ---
   const mostrarAviso = (titulo: string, mensaje: string, accion?: () => void, error = false) => {
     setAvisoConfig({ 
       titulo, 
@@ -130,7 +129,7 @@ export const AdminScreen = () => {
   const ejecutarGuardado = async () => {
     const categoriaFinal = categoria === 'Accesorios' ? categoriaPersonalizada : categoria;
     if (!nombre || !precio || imagenes.length === 0 || !categoriaFinal) {
-      mostrarAviso("⚠️ ATENCIÓN", "Por favor, completá todos los campos y fotos.", undefined, true);
+      mostrarAviso("⚠️ ATENCIÓN", "Faltan datos o fotos.", undefined, true);
       return;
     }
     setCargando(true);
@@ -167,15 +166,15 @@ export const AdminScreen = () => {
       if (idEdicion) {
         await updateDoc(doc(db, 'productos', idEdicion), payload);
         setCargando(false);
-        mostrarAviso("✨ ÉXITO", "Producto actualizado correctamente.", () => limpiarYSalir());
+        mostrarAviso("✨ ÉXITO", "Producto actualizado.", () => limpiarYSalir());
       } else {
         await addDoc(collection(db, 'productos'), { ...payload, fechaCreacion: new Date().toISOString() });
         setCargando(false);
-        mostrarAviso("✨ ÉXITO", "Nuevo artículo publicado con éxito.", () => limpiarYSalir());
+        mostrarAviso("✨ ÉXITO", "Artículo publicado.", () => limpiarYSalir());
       }
     } catch (e) {
       setCargando(false);
-      mostrarAviso("❌ ERROR", "No se pudo procesar la subida.", undefined, true);
+      mostrarAviso("❌ ERROR", "Falló la subida.", undefined, true);
     }
   };
 
@@ -187,7 +186,7 @@ export const AdminScreen = () => {
   };
 
   const confirmarBorrado = (id: string) => {
-    mostrarAviso("¿BORRAR PRODUCTO?", "Esta acción es definitiva. ¿Estás segura?", async () => {
+    mostrarAviso("¿BORRAR?", "¿Estás segura de eliminar este producto?", async () => {
         await deleteDoc(doc(db, 'productos', id));
         obtenerProductos();
         setAvisoVisible(false);
@@ -216,7 +215,7 @@ export const AdminScreen = () => {
         />
       </View>
 
-      {/* VISTAS (LISTA / FORMULARIO / CONFIG) */}
+      {/* VISTA: LISTA (CON GLOBITOS RESTAURADOS) */}
       {vista === 'lista' && (
         <FlatList
           data={productos}
@@ -228,8 +227,23 @@ export const AdminScreen = () => {
             <Surface style={styles.cardItem} elevation={1}>
               <List.Item
                 title={item.nombre.toUpperCase()}
-                description={`${item.categoria} | $${item.precio}`}
-                left={() => <Image source={{ uri: item.imagenes ? item.imagenes[0] : item.imagen }} style={styles.miniImg} />}
+                description={`${item.categoria} | $${item.precio} | Stock: ${item.stock || 0}`}
+                left={() => (
+                  <View style={styles.miniImgContainer}>
+                    <Image source={{ uri: item.imagenes ? item.imagenes[0] : item.imagen }} style={styles.miniImg} />
+                    {/* ✨ LOS GLOBITOS DE ALERTA ✨ */}
+                    {(item.stock <= 3) && (
+                      <Badge 
+                        style={[
+                            styles.badgeStock, 
+                            { backgroundColor: item.stock === 0 ? '#B00020' : theme.secondary, color: theme.primary }
+                        ]}
+                      >
+                        {item.stock}
+                      </Badge>
+                    )}
+                  </View>
+                )}
                 right={() => (
                   <View style={{ flexDirection: 'row' }}>
                     <IconButton icon="pencil-outline" iconColor={theme.primary} onPress={() => {
@@ -252,6 +266,7 @@ export const AdminScreen = () => {
         />
       )}
 
+      {/* VISTA: FORMULARIO */}
       {vista === 'formulario' && (
         <ScrollView contentContainerStyle={styles.formContainer} keyboardShouldPersistTaps="handled">
           <Text style={[styles.labelForm, { color: theme.primary }]}>FOTOS (TOCÁ LA PORTADA ⭐)</Text>
@@ -278,13 +293,13 @@ export const AdminScreen = () => {
           </View>
           <TextInput label="Detalles y Medidas" value={descripcion} onChangeText={setDescripcion} mode="outlined" multiline numberOfLines={5} style={[styles.input, { height: 120 }]} outlineColor={theme.primary} />
           <Button mode="contained" onPress={ejecutarGuardado} loading={cargando} disabled={cargando} style={styles.btnMain} buttonColor={theme.primary} textColor={theme.onPrimary}>
-            {idEdicion ? "ACTUALIZAR ARTÍCULO" : "PUBLICAR EN TIENDA"}
+            {idEdicion ? "ACTUALIZAR" : "PUBLICAR"}
           </Button>
           <Button mode="text" textColor={theme.primary} onPress={limpiarYSalir}>CANCELAR</Button>
         </ScrollView>
       )}
 
-      {/* --- ✨ EL MODAL ELEGANTE QUE REEMPLAZA AL FEO --- */}
+      {/* DIÁLOGO ELEGANTE */}
       <Portal>
         <Dialog visible={avisoVisible} onDismiss={() => setAvisoVisible(false)} style={{ borderRadius: 0, backgroundColor: theme.background }}>
           <Dialog.Title style={{ color: theme.primary, letterSpacing: 2, fontSize: 16 }}>{avisoConfig.titulo}</Dialog.Title>
@@ -293,19 +308,10 @@ export const AdminScreen = () => {
           </Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setAvisoVisible(false)} textColor={theme.secondary}>CERRAR</Button>
-            <Button 
-                mode="contained" 
-                buttonColor={theme.primary} 
-                onPress={avisoConfig.accion} 
-                textColor={theme.onPrimary}
-                labelStyle={{ fontWeight: 'bold' }}
-            >
-              ACEPTAR
-            </Button>
+            <Button mode="contained" buttonColor={theme.primary} onPress={avisoConfig.accion} textColor={theme.onPrimary}>ACEPTAR</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
-
     </View>
   );
 };
@@ -325,6 +331,8 @@ const styles = StyleSheet.create({
   labelForm: { fontWeight: 'bold', fontSize: 10, letterSpacing: 2 },
   btnMain: { paddingVertical: 8, borderRadius: 0, marginTop: 10 },
   cardItem: { backgroundColor: '#fff', marginBottom: 10, marginHorizontal: 5 },
+  miniImgContainer: { position: 'relative' }, // <--- Vuelve el contenedor para el globito
   miniImg: { width: 50, height: 65, marginLeft: 10 },
+  badgeStock: { position: 'absolute', top: -5, right: -5, fontWeight: 'bold' }, // <--- Estilo del globito
   orderCard: { marginBottom: 15, backgroundColor: '#fff', borderLeftWidth: 4 }
 });
