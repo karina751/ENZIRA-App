@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Platform, Dimensions, TouchableOpacity, FlatList } from 'react-native';
-import { Text, TextInput, Button, IconButton, Snackbar, Portal, Card, Divider, List, Chip } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, Platform, Dimensions, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { Text, TextInput, Button, IconButton, Snackbar, Portal, Card, Divider, Chip } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 
 // Firebase y Tema
@@ -25,8 +25,9 @@ export const LoginScreen = () => {
   const [cargando, setCargando] = useState(false);
   const [esRegistro, setEsRegistro] = useState(false);
 
-  // Estado para Pedidos del Cliente
+  // Estados para Pedidos
   const [pedidos, setPedidos] = useState<any[]>([]);
+  const [cargandoPedidos, setCargandoPedidos] = useState(true);
 
   // Estados para avisos
   const [snackVisible, setSnackVisible] = useState(false);
@@ -37,26 +38,33 @@ export const LoginScreen = () => {
     const unsubAuth = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        // Obtener Rol
+        // Obtener Rol del usuario
         const docRef = doc(db, 'usuarios', currentUser.uid);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) setRol(docSnap.data().rol);
 
-        // Obtener sus Pedidos (Solo si es cliente)
+        // Obtener sus Pedidos en Tiempo Real
         const q = query(
           collection(db, 'pedidos'),
           where('clienteUid', '==', currentUser.uid),
           orderBy('fecha', 'desc')
         );
+
         const unsubOrders = onSnapshot(q, (snap) => {
           let lista: any[] = [];
           snap.forEach(doc => lista.push({ id: doc.id, ...doc.data() }));
           setPedidos(lista);
+          setCargandoPedidos(false);
+        }, (error) => {
+          console.log("Error en pedidos:", error);
+          setCargandoPedidos(false);
         });
+
         return () => unsubOrders();
       } else {
         setRol(null);
         setPedidos([]);
+        setCargandoPedidos(false);
       }
     });
     return () => unsubAuth();
@@ -101,46 +109,62 @@ export const LoginScreen = () => {
     navigation.navigate('Home');
   };
 
-  // --- VISTA A: SI EL USUARIO ESTÁ LOGUEADO (PERFIL Y PEDIDOS) ---
+  // --- VISTA A: PERFIL DEL CLIENTE (Logueado) ---
   if (user) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
-        <IconButton icon="arrow-left" style={styles.botonCerrar} onPress={() => navigation.goBack()} iconColor={theme.primary} />
+        <IconButton 
+          icon="arrow-left" 
+          style={styles.botonCerrar} 
+          onPress={() => navigation.goBack()} 
+          iconColor={theme.primary} 
+        />
         
         <ScrollView contentContainerStyle={styles.scroll}>
           <View style={styles.cardLogin}>
-            <Text style={[styles.logo, { color: theme.primary, textAlign: 'center' }]}>MI PERFIL</Text>
-            <Text style={[styles.subtitulo, { color: theme.secondary, textAlign: 'center', marginBottom: 20 }]}>
-              {user.email}
+            <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                <IconButton icon="account-circle-outline" size={60} iconColor={theme.primary} />
+                <Text style={[styles.logo, { color: theme.primary, fontSize: 24, letterSpacing: 4 }]}>MI CUENTA</Text>
+                <Text style={{ color: theme.secondary, fontWeight: 'bold', fontSize: 12 }}>{user.email}</Text>
+            </View>
+
+            <Divider style={{ marginBottom: 25, opacity: 0.2 }} />
+
+            <Text style={[styles.bienvenida, { color: theme.primary, fontSize: 16, marginBottom: 15, textAlign: 'left' }]}>
+                MIS COMPRAS ✨
             </Text>
 
-            <Divider style={{ marginBottom: 20 }} />
-
-            <Text style={[styles.bienvenida, { color: theme.primary, fontSize: 16, marginBottom: 15 }]}>
-                HISTORIAL DE PEDIDOS
-            </Text>
-
-            {pedidos.length === 0 ? (
-                <Text style={{ color: theme.text, opacity: 0.5, textAlign: 'center', fontStyle: 'italic' }}>
-                    Aún no has realizado pedidos.
-                </Text>
+            {cargandoPedidos ? (
+                <ActivityIndicator color={theme.primary} style={{ marginTop: 20 }} />
+            ) : pedidos.length === 0 ? (
+                <View style={styles.vacioCont}>
+                    <Text style={{ color: theme.text, opacity: 0.5, fontStyle: 'italic' }}>
+                        Aún no has realizado pedidos.
+                    </Text>
+                </View>
             ) : (
                 pedidos.map((item) => (
                     <Card key={item.id} style={styles.orderCard} elevation={1}>
                         <Card.Content>
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <Text style={{ fontWeight: 'bold', color: theme.primary }}>
+                                <Text style={{ fontWeight: 'bold', color: theme.primary, fontSize: 13 }}>
                                     {item.fecha?.toDate ? item.fecha.toDate().toLocaleDateString() : 'Reciente'}
                                 </Text>
                                 <Chip 
-                                    textStyle={{ fontSize: 10, color: '#fff' }} 
-                                    style={{ backgroundColor: item.estado === 'Pendiente' ? theme.primary : '#25D366' }}
+                                    textStyle={{ fontSize: 10, color: '#fff', fontWeight: 'bold' }} 
+                                    style={{ backgroundColor: item.estado === 'Pendiente' ? theme.primary : '#25D366', height: 26 }}
                                 >
-                                    {item.estado}
+                                    {item.estado.toUpperCase()}
                                 </Chip>
                             </View>
-                            <Text style={{ fontSize: 12, marginTop: 5, color: theme.text }}>
-                                {item.items?.length} productos • Total: ${item.total}
+                            <Divider style={{ marginVertical: 10, opacity: 0.1 }} />
+                            {item.items?.map((prod: any, idx: number) => (
+                                <Text key={idx} style={{ fontSize: 12, color: theme.text, marginBottom: 2 }}>
+                                    • {prod.nombre} (x{prod.quantity || prod.cantidad})
+                                </Text>
+                            ))}
+                            <Text style={{ textAlign: 'right', fontWeight: 'bold', marginTop: 10, color: theme.primary, fontSize: 16 }}>
+                                Total: ${item.total}
                             </Text>
                         </Card.Content>
                     </Card>
@@ -148,10 +172,12 @@ export const LoginScreen = () => {
             )}
 
             <Button 
-                mode="outlined" 
+                mode="contained" 
                 onPress={cerrarSesion} 
-                style={{ marginTop: 40, borderColor: theme.primary }} 
-                textColor={theme.primary}
+                style={{ marginTop: 40, borderRadius: 0 }} 
+                buttonColor="#B00020"
+                textColor="#fff"
+                icon="logout"
             >
               CERRAR SESIÓN
             </Button>
@@ -161,7 +187,7 @@ export const LoginScreen = () => {
     );
   }
 
-  // --- VISTA B: FORMULARIO DE LOGIN (EL QUE YA TENÍAS) ---
+  // --- VISTA B: FORMULARIO DE LOGIN / REGISTRO ---
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <IconButton icon="close" style={styles.botonCerrar} onPress={() => navigation.goBack()} iconColor={theme.primary} />
@@ -192,6 +218,7 @@ export const LoginScreen = () => {
               activeOutlineColor={theme.secondary}
               style={styles.input}
               textColor={theme.text}
+              autoCapitalize="none"
             />
 
             <TextInput
@@ -242,17 +269,18 @@ const styles = StyleSheet.create({
   scroll: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
   botonCerrar: { position: 'absolute', top: 40, right: 20, zIndex: 10 },
   cardLogin: { width: '100%', maxWidth: 450, padding: 25 },
-  header: { alignItems: 'center', marginBottom: 50 },
+  header: { alignItems: 'center', marginBottom: 40 },
   logo: { fontSize: 38, fontWeight: 'bold', letterSpacing: 8 },
   subtitulo: { fontSize: 10, letterSpacing: 4, fontWeight: 'bold', marginTop: 5 },
   lineaDecorativa: { width: 40, height: 1, marginTop: 15 },
   bienvenida: { fontSize: 22, fontWeight: 'bold', textAlign: 'center', letterSpacing: 2 },
-  instruccion: { fontSize: 10, textAlign: 'center', marginBottom: 30, marginTop: 10, letterSpacing: 1 },
+  instruccion: { fontSize: 10, textAlign: 'center', marginBottom: 30, marginTop: 10, letterSpacing: 1, textTransform: 'uppercase' },
   form: { width: '100%' },
   input: { marginBottom: 15, backgroundColor: '#fff' },
-  boton: { borderRadius: 0, paddingVertical: 10 },
+  boton: { borderRadius: 0, paddingVertical: 10, marginTop: 10 },
   labelBoton: { fontWeight: 'bold', letterSpacing: 2, fontSize: 14 },
   switchCont: { marginTop: 25, alignItems: 'center' },
   switchTexto: { fontWeight: 'bold', fontSize: 12, textDecorationLine: 'underline', opacity: 0.7 },
-  orderCard: { marginBottom: 10, backgroundColor: '#fff', borderRadius: 0, borderLeftWidth: 3, borderLeftColor: '#CFAF68' }
+  orderCard: { marginBottom: 12, backgroundColor: '#fff', borderRadius: 0, borderLeftWidth: 3, borderLeftColor: '#CFAF68' },
+  vacioCont: { padding: 30, alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.02)', borderRadius: 10 }
 });
