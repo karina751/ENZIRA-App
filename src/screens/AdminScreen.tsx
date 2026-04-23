@@ -27,9 +27,10 @@ export const AdminScreen = () => {
   const [nombre, setNombre] = useState('');
   const [precio, setPrecio] = useState('');
   const [stock, setStock] = useState(''); 
+  const [descripcion, setDescripcion] = useState(''); // <--- NUEVO: Detalles técnicos
   const [categoria, setCategoria] = useState('Carteras');
   const [categoriaPersonalizada, setCategoriaPersonalizada] = useState('');
-  const [imagen, setImagen] = useState<string | null>(null);
+  const [imagenes, setImagenes] = useState<string[]>([]); // <--- CAMBIO: Ahora es un Array
 
   // --- 1. LÓGICA DE ESTACIÓN ---
   const [estacionActual, setEstacionActual] = useState('');
@@ -71,95 +72,105 @@ export const AdminScreen = () => {
   }, []);
 
   const seleccionarImagen = async () => {
+    if (imagenes.length >= 3) {
+        Alert.alert("ENZIRA", "Máximo 3 fotos por producto.");
+        return;
+    }
+
     let resultado = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [3, 4],
       quality: 0.7,
     });
+
     if (!resultado.canceled) {
-      setImagen(resultado.assets[0].uri);
+      setImagenes([...imagenes, resultado.assets[0].uri]); // Agregamos la nueva URI al array
     }
   };
 
-  // --- 3. LÓGICA DE GUARDADO Y CLOUDINARY ---
+  const eliminarImagenDeLista = (index: number) => {
+    const nuevaLista = [...imagenes];
+    nuevaLista.splice(index, 1);
+    setImagenes(nuevaLista);
+  };
+
+  // --- 3. LÓGICA DE GUARDADO Y CLOUDINARY (MULTI-FOTO) ---
   const ejecutarGuardado = async () => {
     const categoriaFinal = categoria === 'Accesorios' ? categoriaPersonalizada : categoria;
 
-    // Validación con Alerta para saber por qué no avanza
-    if (!nombre || !precio || !imagen || !categoriaFinal) {
-      Alert.alert("ENZIRA", "Faltan datos obligatorios para publicar.");
+    if (!nombre || !precio || imagenes.length === 0 || !categoriaFinal) {
+      Alert.alert("ENZIRA", "Faltan datos o fotos para publicar.");
       return;
     }
 
     setCargando(true);
 
     try {
-      let urlFinal = imagen;
+      // Subimos todas las fotos nuevas en paralelo
+      const urlsSubidas = await Promise.all(
+        imagenes.map(async (uri) => {
+          // Si ya es una URL de Cloudinary (empieza con http), no la subimos de nuevo
+          if (uri.startsWith('http')) return uri;
 
-      // Si la imagen es local, la subimos a tu Cloudinary
-      if (imagen.includes('blob:') || imagen.includes('file:') || imagen.includes('data:')) {
-        const data = new FormData();
-        if (Platform.OS === 'web') {
-          const res = await fetch(imagen);
-          data.append('file', await res.blob());
-        } else {
-          data.append('file', { uri: imagen, type: 'image/jpeg', name: 'foto.jpg' } as any);
-        }
-        
-        // Tus datos reales de Cloudinary
-        data.append('upload_preset', 'ENZIRA-bags');
+          const data = new FormData();
+          if (Platform.OS === 'web') {
+            const res = await fetch(uri);
+            data.append('file', await res.blob());
+          } else {
+            data.append('file', { uri, type: 'image/jpeg', name: 'foto.jpg' } as any);
+          }
+          
+          data.append('upload_preset', 'ENZIRA-bags');
 
-        const cloudRes = await fetch('https://api.cloudinary.com/v1_1/dlwoie6yt/image/upload', {
-          method: 'POST',
-          body: data,
-        });
-        
-        const file = await cloudRes.json();
-        
-        // ✨ OPTIMIZACIÓN: f_auto y q_auto para que pesen poco
-        urlFinal = file.secure_url.replace('/upload/', '/upload/f_auto,q_auto/');
-      }
+          const cloudRes = await fetch('https://api.cloudinary.com/v1_1/dlwoie6yt/image/upload', {
+            method: 'POST',
+            body: data,
+          });
+          
+          const file = await cloudRes.json();
+          return file.secure_url.replace('/upload/', '/upload/f_auto,q_auto/');
+        })
+      );
 
       const payload = { 
         nombre: nombre.trim(), 
         precio: parseFloat(precio) || 0, 
         stock: parseInt(stock) || 0, 
+        descripcion: descripcion.trim(), // <--- Guardamos las características
         categoria: categoriaFinal, 
-        imagen: urlFinal 
+        imagenes: urlsSubidas // <--- Guardamos el array de URLs
       };
 
       if (idEdicion) {
         await updateDoc(doc(db, 'productos', idEdicion), payload);
-        Alert.alert("ÉXITO", "Inventario actualizado correctamente.");
+        Alert.alert("ÉXITO", "Producto actualizado con sus detalles.");
       } else {
         await addDoc(collection(db, 'productos'), { ...payload, fechaCreacion: new Date().toISOString() });
-        Alert.alert("ÉXITO", "Nuevo artículo publicado.");
+        Alert.alert("ÉXITO", "Nuevo artículo publicado con éxito.");
       }
       limpiarYSalir();
     } catch (e) {
-      Alert.alert("ERROR", "No se pudo guardar en el servidor.");
+      Alert.alert("ERROR", "No se pudo procesar el lote de imágenes.");
     } finally {
       setCargando(false);
     }
   };
 
   const limpiarYSalir = () => {
-    setIdEdicion(null); setNombre(''); setPrecio(''); setStock('');
-    setCategoria('Carteras'); setCategoriaPersonalizada(''); setImagen(null);
+    setIdEdicion(null); setNombre(''); setPrecio(''); setStock(''); setDescripcion('');
+    setCategoria('Carteras'); setCategoriaPersonalizada(''); setImagenes([]);
     setVista('lista'); obtenerProductos();
   };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* HEADER DINÁMICO */}
       <Surface style={[styles.header, { backgroundColor: theme.background }]} elevation={1}>
         <IconButton icon="arrow-left" iconColor={theme.primary} onPress={() => navigation.goBack()} />
         <Text style={[styles.tituloHeader, { color: theme.primary }]}>GESTIÓN DIRECTIVA</Text>
         <View style={{ width: 48 }} /> 
       </Surface>
 
-      {/* SELECTOR DE VISTAS */}
       <View style={{ paddingHorizontal: 15, marginVertical: 15 }}>
         <SegmentedButtons
           value={vista}
@@ -174,7 +185,6 @@ export const AdminScreen = () => {
         />
       </View>
 
-      {/* VISTA: LISTA DE PRODUCTOS */}
       {vista === 'lista' && (
         <FlatList
           data={productos}
@@ -187,11 +197,13 @@ export const AdminScreen = () => {
               <List.Item
                 title={item.nombre.toUpperCase()}
                 description={`${item.categoria} | $${item.precio}`}
-                left={() => <Image source={{ uri: item.imagen }} style={styles.miniImg} />}
+                left={() => <Image source={{ uri: item.imagenes ? item.imagenes[0] : item.imagen }} style={styles.miniImg} />}
                 right={() => (
                   <IconButton icon="pencil-outline" iconColor={theme.primary} onPress={() => {
                     setIdEdicion(item.id); setNombre(item.nombre); setPrecio(item.precio.toString());
-                    setStock(item.stock?.toString() || '0'); setImagen(item.imagen);
+                    setStock(item.stock?.toString() || '0'); 
+                    setDescripcion(item.descripcion || '');
+                    setImagenes(item.imagenes || [item.imagen]); // Migramos si era una sola
                     if(['Carteras', 'Mochilas', 'Billeteras'].includes(item.categoria)) {
                         setCategoria(item.categoria); setCategoriaPersonalizada('');
                     } else {
@@ -206,14 +218,32 @@ export const AdminScreen = () => {
         />
       )}
 
-      {/* VISTA: FORMULARIO (JSX Directo para que el teclado no pierda foco) */}
       {vista === 'formulario' && (
         <ScrollView contentContainerStyle={styles.formContainer} keyboardShouldPersistTaps="handled">
-          <TouchableOpacity onPress={seleccionarImagen} style={[styles.uploadArea, { borderColor: theme.primary }]}>
-            {imagen ? <Image source={{ uri: imagen }} style={styles.imgPreview} /> : <Text style={{ color: theme.primary }}>SUBIR FOTO</Text>}
-          </TouchableOpacity>
           
-          <TextInput label="Nombre" value={nombre} onChangeText={setNombre} mode="outlined" style={styles.input} outlineColor={theme.primary} />
+          {/* SECTOR DE MULTI-IMÁGENES */}
+          <Text style={[styles.labelForm, { color: theme.primary }]}>FOTOS DEL PRODUCTO (MÁX 3)</Text>
+          <View style={styles.multiImageContainer}>
+            {imagenes.map((uri, index) => (
+              <View key={index} style={styles.wrapperImagen}>
+                <Image source={{ uri }} style={styles.previewChica} />
+                <IconButton 
+                    icon="close-circle" 
+                    size={20} 
+                    iconColor="red" 
+                    style={styles.btnBorrarImg} 
+                    onPress={() => eliminarImagenDeLista(index)} 
+                />
+              </View>
+            ))}
+            {imagenes.length < 3 && (
+              <TouchableOpacity onPress={seleccionarImagen} style={[styles.btnAgregarImg, { borderColor: theme.primary }]}>
+                <IconButton icon="camera-plus" iconColor={theme.primary} />
+              </TouchableOpacity>
+            )}
+          </View>
+          
+          <TextInput label="Nombre del Artículo" value={nombre} onChangeText={setNombre} mode="outlined" style={styles.input} outlineColor={theme.primary} />
           
           <Text style={[styles.labelForm, { color: theme.primary }]}>CATEGORÍA</Text>
           <SegmentedButtons
@@ -231,6 +261,18 @@ export const AdminScreen = () => {
             <TextInput label="Precio" value={precio} onChangeText={setPrecio} keyboardType="numeric" mode="outlined" style={[styles.input, { width: '48%' }]} />
             <TextInput label="Stock" value={stock} onChangeText={setStock} keyboardType="numeric" mode="outlined" style={[styles.input, { width: '48%' }]} />
           </View>
+
+          <TextInput 
+            label="Características y Medidas" 
+            value={descripcion} 
+            onChangeText={setDescripcion} 
+            mode="outlined" 
+            multiline 
+            numberOfLines={5} 
+            placeholder="Ej: Alto: 30cm, Ancho: 20cm. Interior forrado con bolsillo..."
+            style={[styles.input, { height: 120 }]} 
+            outlineColor={theme.primary} 
+          />
           
           <Button mode="contained" onPress={ejecutarGuardado} loading={cargando} style={styles.btnMain} buttonColor={theme.primary} textColor={theme.onPrimary}>
             {idEdicion ? "ACTUALIZAR ARTÍCULO" : "PUBLICAR EN TIENDA"}
@@ -239,7 +281,7 @@ export const AdminScreen = () => {
         </ScrollView>
       )}
 
-      {/* VISTA: ESTILO Y TEMPORADA */}
+      {/* VISTAS DE CONFIG Y PEDIDOS (Sin cambios) */}
       {vista === 'config' && (
         <ScrollView contentContainerStyle={styles.formContainer}>
           <Card style={[styles.orderCard, { borderLeftColor: theme.secondary }]}>
@@ -259,7 +301,6 @@ export const AdminScreen = () => {
         </ScrollView>
       )}
 
-      {/* VISTA: PEDIDOS */}
       {vista === 'pedidos' && (
         <FlatList
           data={pedidos}
@@ -278,7 +319,7 @@ export const AdminScreen = () => {
       )}
 
       <Snackbar visible={snackbarVisible} onDismiss={() => setSnackbarVisible(false)} duration={2000} style={{ backgroundColor: theme.primary }}>
-        ✨ ¡Estética actualizada para todos los clientes!
+        ✨ ¡Estética actualizada!
       </Snackbar>
     </View>
   );
@@ -289,10 +330,13 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: Platform.OS === 'ios' ? 50 : 20, paddingBottom: 15, paddingHorizontal: 10 },
   tituloHeader: { fontSize: 16, fontWeight: 'bold', letterSpacing: 4 },
   formContainer: { padding: 25 },
-  uploadArea: { width: '100%', height: 300, backgroundColor: '#fff', borderStyle: 'dashed', borderWidth: 1, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
-  imgPreview: { width: '100%', height: '100%', resizeMode: 'cover' },
+  multiImageContainer: { flexDirection: 'row', marginBottom: 20, marginTop: 10 },
+  wrapperImagen: { position: 'relative', marginRight: 10 },
+  previewChica: { width: 80, height: 100, borderRadius: 5 },
+  btnBorrarImg: { position: 'absolute', top: -15, right: -15 },
+  btnAgregarImg: { width: 80, height: 100, borderStyle: 'dashed', borderWidth: 1, justifyContent: 'center', alignItems: 'center', borderRadius: 5 },
   input: { marginBottom: 15, backgroundColor: '#fff' },
-  labelForm: { fontWeight: 'bold', fontSize: 11, marginBottom: 8 },
+  labelForm: { fontWeight: 'bold', fontSize: 11, letterSpacing: 2 },
   btnMain: { paddingVertical: 8, borderRadius: 0, marginTop: 10 },
   cardItem: { backgroundColor: '#fff', marginBottom: 10, marginHorizontal: 5 },
   miniImg: { width: 50, height: 65, marginLeft: 10 },
