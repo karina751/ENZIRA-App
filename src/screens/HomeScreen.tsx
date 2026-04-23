@@ -100,7 +100,7 @@ export const HomeScreen = () => {
       <Text style={[styles.footerTitulo, { color: theme.primary }]}>ENZIRA - ALTA COSTURA</Text>
       <View style={styles.socialIcons}>
         <IconButton icon="instagram" iconColor={theme.primary} onPress={() => Linking.openURL('https://www.instagram.com/enzira.bags')} />
-        <IconButton icon="whatsapp" iconColor="#25D366" onPress={() => Linking.openURL('https://wa.me/5493875222620')} />
+        <IconButton icon="whatsapp" iconColor="#25D366" onPress={() => Linking.openURL('https://wa.me/5493873001475')} />
       </View>
       <Text style={[styles.copyright, { color: theme.primary }]}>© 2026 ENZIRA</Text>
     </View>
