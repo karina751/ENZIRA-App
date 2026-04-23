@@ -45,8 +45,9 @@ export const AdminScreen = () => {
   const [productos, setProductos] = useState<any[]>([]);
   const [pedidos, setPedidos] = useState<any[]>([]);
   const [cargando, setCargando] = useState(false);
+  const [estacionActual, setEstacionActual] = useState('');
   
-  // Alertas Lindas
+  // Alertas
   const [avisoVisible, setAvisoVisible] = useState(false);
   const [avisoConfig, setAvisoConfig] = useState({ titulo: '', mensaje: '', esError: false, accion: () => {} });
 
@@ -61,23 +62,7 @@ export const AdminScreen = () => {
   const [imagenes, setImagenes] = useState<string[]>([]);
   const [fotoPrincipal, setFotoPrincipal] = useState(0); 
 
-  // --- 🛠️ FUNCIONES DE GESTIÓN DE PEDIDOS ---
-  const marcarEntregado = async (id: string) => {
-    try {
-      await updateDoc(doc(db, 'pedidos', id), { estado: 'Entregado' });
-      setAvisoVisible(false);
-    } catch (e) {
-      mostrarAviso("ERROR", "No se pudo actualizar el pedido.");
-    }
-  };
-
-  const borrarPedido = (id: string) => {
-    mostrarAviso("ELIMINAR REGISTRO", "¿Borrar este pedido de la lista definitivamente?", async () => {
-      await deleteDoc(doc(db, 'pedidos', id));
-      setAvisoVisible(false);
-    });
-  };
-
+  // --- 🛠️ FUNCIONES DE AVISO Y GESTIÓN ---
   const mostrarAviso = (titulo: string, mensaje: string, accion?: () => void, error = false) => {
     setAvisoConfig({ 
       titulo, 
@@ -88,9 +73,30 @@ export const AdminScreen = () => {
     setAvisoVisible(true);
   };
 
+  const marcarEntregado = async (id: string) => {
+    await updateDoc(doc(db, 'pedidos', id), { estado: 'Entregado' });
+  };
+
+  const borrarPedido = (id: string) => {
+    mostrarAviso("BORRAR REGISTRO", "¿Eliminar pedido definitivamente?", async () => {
+        await deleteDoc(doc(db, 'pedidos', id));
+        setAvisoVisible(false);
+    });
+  };
+
+  const confirmarBorrado = (id: string) => {
+    mostrarAviso("¿ELIMINAR PRODUCTO?", "Esta acción no se puede deshacer.", async () => {
+        await deleteDoc(doc(db, 'productos', id));
+        setAvisoVisible(false);
+    });
+  };
+
   // --- 🔥 CARGA DE DATOS REAL TIME ---
   useEffect(() => {
-    // Escuchar Productos
+    const unsubEstilo = onSnapshot(doc(db, 'configuracion', 'apariencia'), (docSnap) => {
+      if (docSnap.exists()) setEstacionActual(docSnap.data().estacionActual);
+    });
+
     const qProd = query(collection(db, 'productos'), orderBy('fechaCreacion', 'desc'));
     const unsubProd = onSnapshot(qProd, (snap) => {
         const listaTemp: any[] = [];
@@ -98,7 +104,6 @@ export const AdminScreen = () => {
         setProductos(listaTemp);
     });
 
-    // Escuchar Pedidos
     const qOrders = query(collection(db, 'pedidos'), orderBy('fecha', 'desc'));
     const unsubOrders = onSnapshot(qOrders, (snapshot) => {
       const listaPedidos: any[] = [];
@@ -106,10 +111,10 @@ export const AdminScreen = () => {
       setPedidos(listaPedidos);
     });
 
-    return () => { unsubProd(); unsubOrders(); };
+    return () => { unsubEstilo(); unsubProd(); unsubOrders(); };
   }, []);
 
-  // --- 📸 LÓGICA DE IMÁGENES ---
+  // --- 📸 GESTIÓN DE IMÁGENES ---
   const seleccionarImagen = async () => {
     if (imagenes.length >= 3) {
         mostrarAviso("ENZIRA", "Máximo 3 fotos por producto.");
@@ -136,7 +141,7 @@ export const AdminScreen = () => {
   const ejecutarGuardado = async () => {
     const categoriaFinal = categoria === 'Accesorios' ? categoriaPersonalizada : categoria;
     if (!nombre || !precio || imagenes.length === 0 || !categoriaFinal) {
-      mostrarAviso("⚠️ ATENCIÓN", "Faltan datos o fotos.", undefined, true);
+      mostrarAviso("⚠️ ATENCIÓN", "Completá todos los campos.", undefined, true);
       return;
     }
     setCargando(true);
@@ -188,8 +193,7 @@ export const AdminScreen = () => {
   const limpiarYSalir = () => {
     setIdEdicion(null); setNombre(''); setPrecio(''); setStock(''); setDescripcion('');
     setCategoria('Carteras'); setCategoriaPersonalizada(''); setImagenes([]);
-    setFotoPrincipal(0); setVista('lista');
-    setAvisoVisible(false);
+    setFotoPrincipal(0); setVista('lista'); setAvisoVisible(false);
   };
 
   return (
@@ -214,7 +218,7 @@ export const AdminScreen = () => {
         />
       </View>
 
-      {/* --- VISTA: LISTA DE STOCK --- */}
+      {/* 1. VISTA LISTA (STOCK) */}
       {vista === 'lista' && (
         <FlatList
           data={productos}
@@ -248,6 +252,7 @@ export const AdminScreen = () => {
                         }
                         setVista('formulario');
                     }} />
+                    <IconButton icon="trash-can-outline" iconColor="#B00020" onPress={() => confirmarBorrado(item.id)} />
                   </View>
                 )}
               />
@@ -256,7 +261,7 @@ export const AdminScreen = () => {
         />
       )}
 
-      {/* --- VISTA: PEDIDOS (RESTABLECIDA) --- */}
+      {/* 2. VISTA PEDIDOS */}
       {vista === 'pedidos' && (
         <FlatList
           data={pedidos}
@@ -267,17 +272,10 @@ export const AdminScreen = () => {
               <Card.Content>
                 <View style={styles.orderHeader}>
                   <Text style={[styles.orderEmail, { color: theme.primary }]}>{item.clienteEmail}</Text>
-                  <Chip 
-                    textStyle={{ fontSize: 10, color: theme.background, fontWeight: 'bold' }} 
-                    style={{ backgroundColor: item.estado === 'Pendiente' ? theme.primary : '#25D366' }}
-                  >
-                    {item.estado.toUpperCase()}
+                  <Chip style={{ backgroundColor: item.estado === 'Pendiente' ? theme.primary : '#25D366' }}>
+                    <Text style={{ fontSize: 10, color: theme.background, fontWeight: 'bold' }}>{item.estado.toUpperCase()}</Text>
                   </Chip>
                 </View>
-                <Text style={styles.orderFecha}>
-                  {item.fecha?.toDate ? item.fecha.toDate().toLocaleString() : 'Recién cargado'}
-                </Text>
-                <Divider style={{ marginVertical: 10, opacity: 0.3 }} />
                 {item.items?.map((prod: any, idx: number) => (
                   <Text key={idx} style={{ fontSize: 13, color: theme.text }}>• {prod.nombre} (x{prod.cantidad})</Text>
                 ))}
@@ -286,36 +284,27 @@ export const AdminScreen = () => {
               <Card.Actions>
                 <Button textColor="#B00020" onPress={() => borrarPedido(item.id)}>BORRAR</Button>
                 {item.estado === 'Pendiente' && (
-                  <Button mode="contained" buttonColor={theme.primary} onPress={() => marcarEntregado(item.id)}>
-                    MARCAR ENTREGADO
-                  </Button>
+                  <Button mode="contained" buttonColor={theme.primary} onPress={() => marcarEntregado(item.id)}>ENTREGADO</Button>
                 )}
               </Card.Actions>
             </Card>
           )}
-          ListEmptyComponent={<Text style={styles.vacioText}>No hay pedidos registrados aún.</Text>}
         />
       )}
 
-      {/* --- VISTA: FORMULARIO --- */}
+      {/* 3. VISTA FORMULARIO */}
       {vista === 'formulario' && (
         <ScrollView contentContainerStyle={styles.formContainer} keyboardShouldPersistTaps="handled">
-          <Text style={[styles.labelForm, { color: theme.primary }]}>FOTOS (TOCÁ LA PORTADA ⭐)</Text>
+          <Text style={[styles.labelForm, { color: theme.primary }]}>FOTOS (TOCÁ PORTADA ⭐)</Text>
           <View style={styles.multiImageContainer}>
             {imagenes.map((uri, index) => (
-              <TouchableOpacity key={index} onPress={() => setFotoPrincipal(index)}
-                style={[styles.wrapperImagen, fotoPrincipal === index && { borderColor: theme.secondary, borderWidth: 2, borderRadius: 5 }]}
-              >
+              <TouchableOpacity key={index} onPress={() => setFotoPrincipal(index)} style={[styles.wrapperImagen, fotoPrincipal === index && { borderColor: theme.secondary, borderWidth: 2, borderRadius: 5 }]}>
                 <Image source={{ uri }} style={styles.previewChica} />
                 {fotoPrincipal === index && <Badge size={20} style={[styles.badgeEstrella, { backgroundColor: theme.secondary }]}>⭐</Badge>}
                 <IconButton icon="close-circle" size={18} iconColor="red" style={styles.btnBorrarImg} onPress={() => eliminarImagenDeLista(index)} />
               </TouchableOpacity>
             ))}
-            {imagenes.length < 3 && (
-              <TouchableOpacity onPress={seleccionarImagen} style={[styles.btnAgregarImg, { borderColor: theme.primary }]}>
-                <IconButton icon="camera-plus" iconColor={theme.primary} />
-              </TouchableOpacity>
-            )}
+            {imagenes.length < 3 && <TouchableOpacity onPress={seleccionarImagen} style={[styles.btnAgregarImg, { borderColor: theme.primary }]}><IconButton icon="camera-plus" iconColor={theme.primary} /></TouchableOpacity>}
           </View>
           <TextInput label="Nombre" value={nombre} onChangeText={setNombre} mode="outlined" style={styles.input} outlineColor={theme.primary} />
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -323,23 +312,40 @@ export const AdminScreen = () => {
             <TextInput label="Stock" value={stock} onChangeText={setStock} keyboardType="numeric" mode="outlined" style={[styles.input, { width: '48%' }]} />
           </View>
           <TextInput label="Detalles Técnicos" value={descripcion} onChangeText={setDescripcion} mode="outlined" multiline numberOfLines={5} style={[styles.input, { height: 120 }]} outlineColor={theme.primary} />
-          <Button mode="contained" onPress={ejecutarGuardado} loading={cargando} style={styles.btnMain} buttonColor={theme.primary} textColor={theme.onPrimary}>
-            {idEdicion ? "ACTUALIZAR" : "PUBLICAR"}
-          </Button>
+          <Button mode="contained" onPress={ejecutarGuardado} loading={cargando} style={styles.btnMain} buttonColor={theme.primary} textColor={theme.onPrimary}>{idEdicion ? "ACTUALIZAR" : "PUBLICA"}</Button>
           <Button mode="text" textColor={theme.primary} onPress={limpiarYSalir}>CANCELAR</Button>
         </ScrollView>
       )}
 
-      {/* DIÁLOGO ELEGANTE */}
+      {/* 4. VISTA CONFIG */}
+      {vista === 'config' && (
+        <ScrollView contentContainerStyle={styles.formContainer}>
+          <Card style={[styles.orderCard, { borderLeftColor: theme.secondary, backgroundColor: '#fff' }]}>
+            <Card.Title title="ESTÉTICA TEMPORAL" titleStyle={{ color: theme.primary, fontWeight: 'bold' }} />
+            <Card.Content>
+              <SegmentedButtons
+                value={estacionActual}
+                onValueChange={async (v) => { await updateDoc(doc(db, 'configuracion', 'apariencia'), { estacionActual: v }); }}
+                buttons={[
+                  { value: 'otoño', label: 'OTOÑO', icon: 'leaf' },
+                  { value: 'invierno', label: 'INV', icon: 'snowflake' },
+                  { value: 'primavera', label: 'PRIM', icon: 'flower' },
+                  { value: 'verano', label: 'VER', icon: 'sun-side-with-face' },
+                ]}
+              />
+            </Card.Content>
+          </Card>
+        </ScrollView>
+      )}
+
+      {/* PORTAL DE DIÁLOGOS */}
       <Portal>
         <Dialog visible={avisoVisible} onDismiss={() => setAvisoVisible(false)} style={{ borderRadius: 0, backgroundColor: theme.background }}>
           <Dialog.Title style={{ color: theme.primary, letterSpacing: 2 }}>{avisoConfig.titulo}</Dialog.Title>
-          <Dialog.Content>
-            <Text style={{ color: theme.text }}>{avisoConfig.mensaje}</Text>
-          </Dialog.Content>
+          <Dialog.Content><Text style={{ color: theme.text }}>{avisoConfig.mensaje}</Text></Dialog.Content>
           <Dialog.Actions>
             <Button onPress={() => setAvisoVisible(false)} textColor={theme.secondary}>VOLVER</Button>
-            <Button mode="contained" buttonColor={theme.primary} onPress={avisoConfig.accion} textColor={theme.onPrimary}>CONFIRMAR</Button>
+            <Button mode="contained" buttonColor={theme.primary} onPress={avisoConfig.accion} textColor={theme.onPrimary}>ACEPTAR</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -352,7 +358,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 40, paddingBottom: 15, paddingHorizontal: 10 },
   tituloHeader: { fontSize: 16, fontWeight: 'bold', letterSpacing: 4 },
   formContainer: { padding: 25 },
-  multiImageContainer: { flexDirection: 'row', marginBottom: 20, marginTop: 10 },
+  multiImageContainer: { flexDirection: 'row', marginBottom: 20 },
   wrapperImagen: { position: 'relative', marginRight: 15, padding: 2 },
   previewChica: { width: 80, height: 100, borderRadius: 5 },
   badgeEstrella: { position: 'absolute', top: -10, left: -10, zIndex: 10 },
@@ -365,10 +371,8 @@ const styles = StyleSheet.create({
   miniImgContainer: { position: 'relative' },
   miniImg: { width: 50, height: 65, marginLeft: 10 },
   badgeStock: { position: 'absolute', top: -5, right: -5, fontWeight: 'bold' },
-  orderCard: { marginBottom: 15, backgroundColor: '#fff', borderLeftWidth: 4, borderRadius: 0 },
+  orderCard: { marginBottom: 15, borderLeftWidth: 4, borderRadius: 0 },
   orderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 },
   orderEmail: { fontSize: 14, fontWeight: 'bold' },
-  orderFecha: { fontSize: 10, color: '#888', fontStyle: 'italic' },
   orderTotal: { fontSize: 18, fontWeight: 'bold', textAlign: 'right', marginTop: 10 },
-  vacioText: { textAlign: 'center', marginTop: 50, opacity: 0.3, fontStyle: 'italic' }
 });
