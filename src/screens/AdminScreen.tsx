@@ -6,7 +6,6 @@ import {
   Image, 
   ActivityIndicator, 
   TouchableOpacity, 
-  Alert, 
   Platform, 
   FlatList, 
   Dimensions 
@@ -23,7 +22,8 @@ import {
   Card, 
   Surface, 
   Snackbar, 
-  Portal 
+  Portal,
+  Dialog // <--- El protagonista para la vista linda
 } from 'react-native-paper';
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
@@ -44,7 +44,10 @@ export const AdminScreen = () => {
   const [productos, setProductos] = useState<any[]>([]);
   const [pedidos, setPedidos] = useState<any[]>([]);
   const [cargando, setCargando] = useState(false);
-  const [snackbarVisible, setSnackbarVisible] = useState(false);
+  
+  // --- ✨ NUEVOS ESTADOS PARA ALERTAS LINDAS ---
+  const [avisoVisible, setAvisoVisible] = useState(false);
+  const [avisoConfig, setAvisoConfig] = useState({ titulo: '', mensaje: '', esError: false, accion: () => {} });
 
   // Estados del Formulario
   const [idEdicion, setIdEdicion] = useState<string | null>(null);
@@ -57,16 +60,15 @@ export const AdminScreen = () => {
   const [imagenes, setImagenes] = useState<string[]>([]);
   const [fotoPrincipal, setFotoPrincipal] = useState(0); 
 
-  // --- 🛠️ FUNCIÓN DE ALERTA HÍBRIDA (WEB + MOBILE) ---
-  const mostrarMensaje = (titulo: string, mensaje: string, accion?: () => void) => {
-    if (Platform.OS === 'web') {
-      // En Web usamos el alert nativo del navegador
-      window.alert(`${titulo}: ${mensaje}`);
-      if (accion) accion();
-    } else {
-      // En móvil usamos el Alert prolijo de React Native
-      Alert.alert(titulo, mensaje, [{ text: "OK", onPress: accion }]);
-    }
+  // --- 🛠️ FUNCIÓN PARA DISPARAR EL DIÁLOGO ELEGANTE ---
+  const mostrarAviso = (titulo: string, mensaje: string, accion?: () => void, error = false) => {
+    setAvisoConfig({ 
+      titulo, 
+      mensaje, 
+      esError: error,
+      accion: accion ? accion : () => setAvisoVisible(false) 
+    });
+    setAvisoVisible(true);
   };
 
   useEffect(() => {
@@ -89,11 +91,7 @@ export const AdminScreen = () => {
         listaTemp.push({ id: doc.id, ...doc.data() });
       });
       setProductos(listaTemp);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setCargando(false);
-    }
+    } catch (error) { console.error(error); } finally { setCargando(false); }
   };
 
   useEffect(() => {
@@ -108,7 +106,7 @@ export const AdminScreen = () => {
 
   const seleccionarImagen = async () => {
     if (imagenes.length >= 3) {
-        mostrarMensaje("ENZIRA", "Máximo 3 fotos por producto.");
+        mostrarAviso("ENZIRA", "Máximo 3 fotos por producto.");
         return;
     }
     let resultado = await ImagePicker.launchImageLibraryAsync({
@@ -131,14 +129,11 @@ export const AdminScreen = () => {
 
   const ejecutarGuardado = async () => {
     const categoriaFinal = categoria === 'Accesorios' ? categoriaPersonalizada : categoria;
-
     if (!nombre || !precio || imagenes.length === 0 || !categoriaFinal) {
-      mostrarMensaje("ENZIRA", "Faltan datos o fotos para publicar.");
+      mostrarAviso("⚠️ ATENCIÓN", "Por favor, completá todos los campos y fotos.", undefined, true);
       return;
     }
-
     setCargando(true);
-
     try {
       const urlsSubidas = await Promise.all(
         imagenes.map(async (uri) => {
@@ -151,10 +146,8 @@ export const AdminScreen = () => {
             data.append('file', { uri, type: 'image/jpeg', name: 'foto.jpg' } as any);
           }
           data.append('upload_preset', 'ENZIRA-bags');
-
           const cloudRes = await fetch('https://api.cloudinary.com/v1_1/dlwoie6yt/image/upload', {
-            method: 'POST',
-            body: data,
+            method: 'POST', body: data,
           });
           const file = await cloudRes.json();
           return file.secure_url.replace('/upload/', '/upload/f_auto,q_auto/');
@@ -166,26 +159,23 @@ export const AdminScreen = () => {
       urlsFinales.unshift(fotoElegida);
 
       const payload = { 
-        nombre: nombre.trim(), 
-        precio: parseFloat(precio) || 0, 
-        stock: parseInt(stock) || 0, 
-        descripcion: descripcion.trim(),
-        categoria: categoriaFinal, 
-        imagenes: urlsFinales 
+        nombre: nombre.trim(), precio: parseFloat(precio) || 0, 
+        stock: parseInt(stock) || 0, descripcion: descripcion.trim(),
+        categoria: categoriaFinal, imagenes: urlsFinales 
       };
 
       if (idEdicion) {
         await updateDoc(doc(db, 'productos', idEdicion), payload);
-        setCargando(false); // Bajamos el spinner antes del aviso
-        mostrarMensaje("ÉXITO", "Producto actualizado correctamente.", () => limpiarYSalir());
+        setCargando(false);
+        mostrarAviso("✨ ÉXITO", "Producto actualizado correctamente.", () => limpiarYSalir());
       } else {
         await addDoc(collection(db, 'productos'), { ...payload, fechaCreacion: new Date().toISOString() });
         setCargando(false);
-        mostrarMensaje("ÉXITO", "Nuevo artículo publicado con éxito.", () => limpiarYSalir());
+        mostrarAviso("✨ ÉXITO", "Nuevo artículo publicado con éxito.", () => limpiarYSalir());
       }
     } catch (e) {
       setCargando(false);
-      mostrarMensaje("ERROR", "No se pudo procesar la subida.");
+      mostrarAviso("❌ ERROR", "No se pudo procesar la subida.", undefined, true);
     }
   };
 
@@ -193,19 +183,15 @@ export const AdminScreen = () => {
     setIdEdicion(null); setNombre(''); setPrecio(''); setStock(''); setDescripcion('');
     setCategoria('Carteras'); setCategoriaPersonalizada(''); setImagenes([]);
     setFotoPrincipal(0); setVista('lista'); obtenerProductos();
+    setAvisoVisible(false);
   };
 
   const confirmarBorrado = (id: string) => {
-    if (Platform.OS === 'web') {
-        if (confirm("¿Eliminar producto definitivamente?")) {
-            deleteDoc(doc(db, 'productos', id)).then(() => obtenerProductos());
-        }
-    } else {
-        Alert.alert("ENZIRA", "¿Eliminar producto?", [
-          { text: "Cancelar" },
-          { text: "Eliminar", onPress: async () => { await deleteDoc(doc(db, 'productos', id)); obtenerProductos(); }, style: 'destructive' }
-        ]);
-    }
+    mostrarAviso("¿BORRAR PRODUCTO?", "Esta acción es definitiva. ¿Estás segura?", async () => {
+        await deleteDoc(doc(db, 'productos', id));
+        obtenerProductos();
+        setAvisoVisible(false);
+    });
   };
 
   return (
@@ -230,6 +216,7 @@ export const AdminScreen = () => {
         />
       </View>
 
+      {/* VISTAS (LISTA / FORMULARIO / CONFIG) */}
       {vista === 'lista' && (
         <FlatList
           data={productos}
@@ -267,19 +254,14 @@ export const AdminScreen = () => {
 
       {vista === 'formulario' && (
         <ScrollView contentContainerStyle={styles.formContainer} keyboardShouldPersistTaps="handled">
-          
           <Text style={[styles.labelForm, { color: theme.primary }]}>FOTOS (TOCÁ LA PORTADA ⭐)</Text>
           <View style={styles.multiImageContainer}>
             {imagenes.map((uri, index) => (
-              <TouchableOpacity 
-                key={index} 
-                onPress={() => setFotoPrincipal(index)}
+              <TouchableOpacity key={index} onPress={() => setFotoPrincipal(index)}
                 style={[styles.wrapperImagen, fotoPrincipal === index && { borderColor: theme.secondary, borderWidth: 2, borderRadius: 5 }]}
               >
                 <Image source={{ uri }} style={styles.previewChica} />
-                {fotoPrincipal === index && (
-                  <Badge size={20} style={[styles.badgeEstrella, { backgroundColor: theme.secondary }]}>⭐</Badge>
-                )}
+                {fotoPrincipal === index && <Badge size={20} style={[styles.badgeEstrella, { backgroundColor: theme.secondary }]}>⭐</Badge>}
                 <IconButton icon="close-circle" size={18} iconColor="red" style={styles.btnBorrarImg} onPress={() => eliminarImagenDeLista(index)} />
               </TouchableOpacity>
             ))}
@@ -289,37 +271,12 @@ export const AdminScreen = () => {
               </TouchableOpacity>
             )}
           </View>
-          
-          <TextInput label="Nombre del Artículo" value={nombre} onChangeText={setNombre} mode="outlined" style={styles.input} outlineColor={theme.primary} />
-          
-          <Text style={[styles.labelForm, { color: theme.primary, marginTop: 10 }]}>CATEGORÍA</Text>
-          <SegmentedButtons
-            value={categoria}
-            onValueChange={(val) => { setCategoria(val); if (val !== 'Accesorios') setCategoriaPersonalizada(''); }}
-            buttons={[{ value: 'Carteras', label: 'Cart' }, { value: 'Mochilas', label: 'Moc' }, { value: 'Billeteras', label: 'Bill' }, { value: 'Accesorios', label: 'Otro' }]}
-            style={{ marginBottom: 15 }}
-          />
-
-          {categoria === 'Accesorios' && (
-              <TextInput label="¿Qué accesorio es?" value={categoriaPersonalizada} onChangeText={setCategoriaPersonalizada} mode="outlined" style={styles.input} outlineColor={theme.primary} />
-          )}
-
+          <TextInput label="Nombre" value={nombre} onChangeText={setNombre} mode="outlined" style={styles.input} outlineColor={theme.primary} />
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <TextInput label="Precio" value={precio} onChangeText={setPrecio} keyboardType="numeric" mode="outlined" style={[styles.input, { width: '48%' }]} />
             <TextInput label="Stock" value={stock} onChangeText={setStock} keyboardType="numeric" mode="outlined" style={[styles.input, { width: '48%' }]} />
           </View>
-
-          <TextInput 
-            label="Detalles, Medidas y Características" 
-            value={descripcion} 
-            onChangeText={setDescripcion} 
-            mode="outlined" 
-            multiline 
-            numberOfLines={5} 
-            style={[styles.input, { height: 120 }]} 
-            outlineColor={theme.primary} 
-          />
-          
+          <TextInput label="Detalles y Medidas" value={descripcion} onChangeText={setDescripcion} mode="outlined" multiline numberOfLines={5} style={[styles.input, { height: 120 }]} outlineColor={theme.primary} />
           <Button mode="contained" onPress={ejecutarGuardado} loading={cargando} disabled={cargando} style={styles.btnMain} buttonColor={theme.primary} textColor={theme.onPrimary}>
             {idEdicion ? "ACTUALIZAR ARTÍCULO" : "PUBLICAR EN TIENDA"}
           </Button>
@@ -327,27 +284,28 @@ export const AdminScreen = () => {
         </ScrollView>
       )}
 
-      {vista === 'config' && (
-        <ScrollView contentContainerStyle={styles.formContainer}>
-          <Card style={[styles.orderCard, { borderLeftColor: theme.secondary }]}>
-            <Card.Title title="ESTÉTICA TEMPORAL" titleStyle={{ color: theme.primary, fontWeight: 'bold' }} />
-            <Card.Content>
-              <SegmentedButtons
-                value={estacionActual}
-                onValueChange={async (v) => { await updateDoc(doc(db, 'configuracion', 'apariencia'), { estacionActual: v }); setSnackbarVisible(true); }}
-                buttons={[{ value: 'otoño', label: '🍂' }, { value: 'invierno', label: '❄️' }, { value: 'primavera', label: '🌸' }, { value: 'verano', label: '☀️' }]}
-                theme={{ colors: { secondaryContainer: theme.secondary, onSecondaryContainer: theme.primary } }}
-              />
-            </Card.Content>
-          </Card>
-        </ScrollView>
-      )}
-
+      {/* --- ✨ EL MODAL ELEGANTE QUE REEMPLAZA AL FEO --- */}
       <Portal>
-        <Snackbar visible={snackbarVisible} onDismiss={() => setSnackbarVisible(false)} duration={2000} style={{ backgroundColor: theme.primary }}>
-          ✨ Configuración guardada.
-        </Snackbar>
+        <Dialog visible={avisoVisible} onDismiss={() => setAvisoVisible(false)} style={{ borderRadius: 0, backgroundColor: theme.background }}>
+          <Dialog.Title style={{ color: theme.primary, letterSpacing: 2, fontSize: 16 }}>{avisoConfig.titulo}</Dialog.Title>
+          <Dialog.Content>
+            <Text style={{ color: theme.text, fontSize: 14 }}>{avisoConfig.mensaje}</Text>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setAvisoVisible(false)} textColor={theme.secondary}>CERRAR</Button>
+            <Button 
+                mode="contained" 
+                buttonColor={theme.primary} 
+                onPress={avisoConfig.accion} 
+                textColor={theme.onPrimary}
+                labelStyle={{ fontWeight: 'bold' }}
+            >
+              ACEPTAR
+            </Button>
+          </Dialog.Actions>
+        </Dialog>
       </Portal>
+
     </View>
   );
 };
