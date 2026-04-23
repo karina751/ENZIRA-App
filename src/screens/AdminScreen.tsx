@@ -23,7 +23,8 @@ import {
   Surface, 
   Snackbar, 
   Portal,
-  Dialog 
+  Dialog,
+  Chip
 } from 'react-native-paper';
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
@@ -60,6 +61,23 @@ export const AdminScreen = () => {
   const [imagenes, setImagenes] = useState<string[]>([]);
   const [fotoPrincipal, setFotoPrincipal] = useState(0); 
 
+  // --- 🛠️ FUNCIONES DE GESTIÓN DE PEDIDOS ---
+  const marcarEntregado = async (id: string) => {
+    try {
+      await updateDoc(doc(db, 'pedidos', id), { estado: 'Entregado' });
+      setAvisoVisible(false);
+    } catch (e) {
+      mostrarAviso("ERROR", "No se pudo actualizar el pedido.");
+    }
+  };
+
+  const borrarPedido = (id: string) => {
+    mostrarAviso("ELIMINAR REGISTRO", "¿Borrar este pedido de la lista definitivamente?", async () => {
+      await deleteDoc(doc(db, 'pedidos', id));
+      setAvisoVisible(false);
+    });
+  };
+
   const mostrarAviso = (titulo: string, mensaje: string, accion?: () => void, error = false) => {
     setAvisoConfig({ 
       titulo, 
@@ -70,39 +88,28 @@ export const AdminScreen = () => {
     setAvisoVisible(true);
   };
 
+  // --- 🔥 CARGA DE DATOS REAL TIME ---
   useEffect(() => {
-    const unsubTheme = onSnapshot(doc(db, 'configuracion', 'apariencia'), (docSnap) => {
-      if (docSnap.exists()) setEstacionActual(docSnap.data().estacionActual);
+    // Escuchar Productos
+    const qProd = query(collection(db, 'productos'), orderBy('fechaCreacion', 'desc'));
+    const unsubProd = onSnapshot(qProd, (snap) => {
+        const listaTemp: any[] = [];
+        snap.forEach((doc) => listaTemp.push({ id: doc.id, ...doc.data() }));
+        setProductos(listaTemp);
     });
-    obtenerProductos();
-    return () => unsubTheme();
-  }, []);
 
-  const [estacionActual, setEstacionActual] = useState('');
-
-  const obtenerProductos = async () => {
-    setCargando(true);
-    try {
-      const q = query(collection(db, 'productos'), orderBy('fechaCreacion', 'desc'));
-      const querySnapshot = await getDocs(q);
-      const listaTemp: any[] = [];
-      querySnapshot.forEach((doc) => {
-        listaTemp.push({ id: doc.id, ...doc.data() });
-      });
-      setProductos(listaTemp);
-    } catch (error) { console.error(error); } finally { setCargando(false); }
-  };
-
-  useEffect(() => {
+    // Escuchar Pedidos
     const qOrders = query(collection(db, 'pedidos'), orderBy('fecha', 'desc'));
     const unsubOrders = onSnapshot(qOrders, (snapshot) => {
       const listaPedidos: any[] = [];
       snapshot.forEach(doc => listaPedidos.push({ id: doc.id, ...doc.data() }));
       setPedidos(listaPedidos);
     });
-    return () => unsubOrders();
+
+    return () => { unsubProd(); unsubOrders(); };
   }, []);
 
+  // --- 📸 LÓGICA DE IMÁGENES ---
   const seleccionarImagen = async () => {
     if (imagenes.length >= 3) {
         mostrarAviso("ENZIRA", "Máximo 3 fotos por producto.");
@@ -181,16 +188,8 @@ export const AdminScreen = () => {
   const limpiarYSalir = () => {
     setIdEdicion(null); setNombre(''); setPrecio(''); setStock(''); setDescripcion('');
     setCategoria('Carteras'); setCategoriaPersonalizada(''); setImagenes([]);
-    setFotoPrincipal(0); setVista('lista'); obtenerProductos();
+    setFotoPrincipal(0); setVista('lista');
     setAvisoVisible(false);
-  };
-
-  const confirmarBorrado = (id: string) => {
-    mostrarAviso("¿BORRAR?", "¿Estás segura de eliminar este producto?", async () => {
-        await deleteDoc(doc(db, 'productos', id));
-        obtenerProductos();
-        setAvisoVisible(false);
-    });
   };
 
   return (
@@ -215,13 +214,11 @@ export const AdminScreen = () => {
         />
       </View>
 
-      {/* VISTA: LISTA (CON GLOBITOS RESTAURADOS) */}
+      {/* --- VISTA: LISTA DE STOCK --- */}
       {vista === 'lista' && (
         <FlatList
           data={productos}
           keyExtractor={(item) => item.id}
-          refreshing={cargando}
-          onRefresh={obtenerProductos}
           contentContainerStyle={{ padding: 15 }}
           renderItem={({ item }) => (
             <Surface style={styles.cardItem} elevation={1}>
@@ -231,14 +228,8 @@ export const AdminScreen = () => {
                 left={() => (
                   <View style={styles.miniImgContainer}>
                     <Image source={{ uri: item.imagenes ? item.imagenes[0] : item.imagen }} style={styles.miniImg} />
-                    {/* ✨ LOS GLOBITOS DE ALERTA ✨ */}
                     {(item.stock <= 3) && (
-                      <Badge 
-                        style={[
-                            styles.badgeStock, 
-                            { backgroundColor: item.stock === 0 ? '#B00020' : theme.secondary, color: theme.primary }
-                        ]}
-                      >
+                      <Badge style={[styles.badgeStock, { backgroundColor: item.stock === 0 ? '#B00020' : theme.secondary, color: theme.primary }]}>
                         {item.stock}
                       </Badge>
                     )}
@@ -257,7 +248,6 @@ export const AdminScreen = () => {
                         }
                         setVista('formulario');
                     }} />
-                    <IconButton icon="trash-can-outline" iconColor="#B00020" onPress={() => confirmarBorrado(item.id)} />
                   </View>
                 )}
               />
@@ -266,7 +256,48 @@ export const AdminScreen = () => {
         />
       )}
 
-      {/* VISTA: FORMULARIO */}
+      {/* --- VISTA: PEDIDOS (RESTABLECIDA) --- */}
+      {vista === 'pedidos' && (
+        <FlatList
+          data={pedidos}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ padding: 15 }}
+          renderItem={({ item }) => (
+            <Card style={[styles.orderCard, { borderLeftColor: item.estado === 'Pendiente' ? theme.primary : '#25D366' }]}>
+              <Card.Content>
+                <View style={styles.orderHeader}>
+                  <Text style={[styles.orderEmail, { color: theme.primary }]}>{item.clienteEmail}</Text>
+                  <Chip 
+                    textStyle={{ fontSize: 10, color: theme.background, fontWeight: 'bold' }} 
+                    style={{ backgroundColor: item.estado === 'Pendiente' ? theme.primary : '#25D366' }}
+                  >
+                    {item.estado.toUpperCase()}
+                  </Chip>
+                </View>
+                <Text style={styles.orderFecha}>
+                  {item.fecha?.toDate ? item.fecha.toDate().toLocaleString() : 'Recién cargado'}
+                </Text>
+                <Divider style={{ marginVertical: 10, opacity: 0.3 }} />
+                {item.items?.map((prod: any, idx: number) => (
+                  <Text key={idx} style={{ fontSize: 13, color: theme.text }}>• {prod.nombre} (x{prod.cantidad})</Text>
+                ))}
+                <Text style={[styles.orderTotal, { color: theme.primary }]}>TOTAL: ${item.total}</Text>
+              </Card.Content>
+              <Card.Actions>
+                <Button textColor="#B00020" onPress={() => borrarPedido(item.id)}>BORRAR</Button>
+                {item.estado === 'Pendiente' && (
+                  <Button mode="contained" buttonColor={theme.primary} onPress={() => marcarEntregado(item.id)}>
+                    MARCAR ENTREGADO
+                  </Button>
+                )}
+              </Card.Actions>
+            </Card>
+          )}
+          ListEmptyComponent={<Text style={styles.vacioText}>No hay pedidos registrados aún.</Text>}
+        />
+      )}
+
+      {/* --- VISTA: FORMULARIO --- */}
       {vista === 'formulario' && (
         <ScrollView contentContainerStyle={styles.formContainer} keyboardShouldPersistTaps="handled">
           <Text style={[styles.labelForm, { color: theme.primary }]}>FOTOS (TOCÁ LA PORTADA ⭐)</Text>
@@ -291,8 +322,8 @@ export const AdminScreen = () => {
             <TextInput label="Precio" value={precio} onChangeText={setPrecio} keyboardType="numeric" mode="outlined" style={[styles.input, { width: '48%' }]} />
             <TextInput label="Stock" value={stock} onChangeText={setStock} keyboardType="numeric" mode="outlined" style={[styles.input, { width: '48%' }]} />
           </View>
-          <TextInput label="Detalles y Medidas" value={descripcion} onChangeText={setDescripcion} mode="outlined" multiline numberOfLines={5} style={[styles.input, { height: 120 }]} outlineColor={theme.primary} />
-          <Button mode="contained" onPress={ejecutarGuardado} loading={cargando} disabled={cargando} style={styles.btnMain} buttonColor={theme.primary} textColor={theme.onPrimary}>
+          <TextInput label="Detalles Técnicos" value={descripcion} onChangeText={setDescripcion} mode="outlined" multiline numberOfLines={5} style={[styles.input, { height: 120 }]} outlineColor={theme.primary} />
+          <Button mode="contained" onPress={ejecutarGuardado} loading={cargando} style={styles.btnMain} buttonColor={theme.primary} textColor={theme.onPrimary}>
             {idEdicion ? "ACTUALIZAR" : "PUBLICAR"}
           </Button>
           <Button mode="text" textColor={theme.primary} onPress={limpiarYSalir}>CANCELAR</Button>
@@ -302,13 +333,13 @@ export const AdminScreen = () => {
       {/* DIÁLOGO ELEGANTE */}
       <Portal>
         <Dialog visible={avisoVisible} onDismiss={() => setAvisoVisible(false)} style={{ borderRadius: 0, backgroundColor: theme.background }}>
-          <Dialog.Title style={{ color: theme.primary, letterSpacing: 2, fontSize: 16 }}>{avisoConfig.titulo}</Dialog.Title>
+          <Dialog.Title style={{ color: theme.primary, letterSpacing: 2 }}>{avisoConfig.titulo}</Dialog.Title>
           <Dialog.Content>
-            <Text style={{ color: theme.text, fontSize: 14 }}>{avisoConfig.mensaje}</Text>
+            <Text style={{ color: theme.text }}>{avisoConfig.mensaje}</Text>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setAvisoVisible(false)} textColor={theme.secondary}>CERRAR</Button>
-            <Button mode="contained" buttonColor={theme.primary} onPress={avisoConfig.accion} textColor={theme.onPrimary}>ACEPTAR</Button>
+            <Button onPress={() => setAvisoVisible(false)} textColor={theme.secondary}>VOLVER</Button>
+            <Button mode="contained" buttonColor={theme.primary} onPress={avisoConfig.accion} textColor={theme.onPrimary}>CONFIRMAR</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -331,8 +362,13 @@ const styles = StyleSheet.create({
   labelForm: { fontWeight: 'bold', fontSize: 10, letterSpacing: 2 },
   btnMain: { paddingVertical: 8, borderRadius: 0, marginTop: 10 },
   cardItem: { backgroundColor: '#fff', marginBottom: 10, marginHorizontal: 5 },
-  miniImgContainer: { position: 'relative' }, // <--- Vuelve el contenedor para el globito
+  miniImgContainer: { position: 'relative' },
   miniImg: { width: 50, height: 65, marginLeft: 10 },
-  badgeStock: { position: 'absolute', top: -5, right: -5, fontWeight: 'bold' }, // <--- Estilo del globito
-  orderCard: { marginBottom: 15, backgroundColor: '#fff', borderLeftWidth: 4 }
+  badgeStock: { position: 'absolute', top: -5, right: -5, fontWeight: 'bold' },
+  orderCard: { marginBottom: 15, backgroundColor: '#fff', borderLeftWidth: 4, borderRadius: 0 },
+  orderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 },
+  orderEmail: { fontSize: 14, fontWeight: 'bold' },
+  orderFecha: { fontSize: 10, color: '#888', fontStyle: 'italic' },
+  orderTotal: { fontSize: 18, fontWeight: 'bold', textAlign: 'right', marginTop: 10 },
+  vacioText: { textAlign: 'center', marginTop: 50, opacity: 0.3, fontStyle: 'italic' }
 });
