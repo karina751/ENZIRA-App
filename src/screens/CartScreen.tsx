@@ -53,9 +53,8 @@ export const CartScreen = () => {
       console.log("Error al guardar respaldo del pedido");
     }
 
-    // 4. Redirigir a WhatsApp (Número de Mariel)
-    const url = `https://wa.me/5493875222620?text=${encodeURIComponent(mensaje)}`;
-    
+    // 4. Redirigir a WhatsApp (Número actualizado de Mariel)
+const url = `https://wa.me/5493873001475?text=${encodeURIComponent(mensaje)}`;
     Linking.openURL(url).catch(() => {
       Alert.alert("Error", "No pudimos abrir WhatsApp. Asegurate de tenerlo instalado.");
     });
