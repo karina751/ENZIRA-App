@@ -1,10 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Image, ActivityIndicator, TouchableOpacity, Alert, Platform, FlatList, Dimensions } from 'react-native';
-import { Text, TextInput, Button, IconButton, Divider, List, SegmentedButtons, Badge, Card, Chip, Surface, Snackbar, Portal } from 'react-native-paper';
+import { 
+  View, 
+  StyleSheet, 
+  ScrollView, 
+  Image, 
+  ActivityIndicator, 
+  TouchableOpacity, 
+  Alert, 
+  Platform, 
+  FlatList, 
+  Dimensions 
+} from 'react-native';
+import { 
+  Text, 
+  TextInput, 
+  Button, 
+  IconButton, 
+  Divider, 
+  List, 
+  SegmentedButtons, 
+  Badge, 
+  Card, 
+  Surface, 
+  Snackbar, 
+  Portal 
+} from 'react-native-paper';
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
 
-// Herramientas de Firebase y Tema
+// Firebase y Tema
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAppTheme } from '../context/ThemeContext'; 
@@ -31,7 +55,7 @@ export const AdminScreen = () => {
   const [categoria, setCategoria] = useState('Carteras');
   const [categoriaPersonalizada, setCategoriaPersonalizada] = useState('');
   const [imagenes, setImagenes] = useState<string[]>([]);
-  const [fotoPrincipal, setFotoPrincipal] = useState(0); // <--- NUEVO: Índice de la foto portada
+  const [fotoPrincipal, setFotoPrincipal] = useState(0); 
 
   // --- 1. LÓGICA DE ESTACIÓN ---
   const [estacionActual, setEstacionActual] = useState('');
@@ -77,14 +101,12 @@ export const AdminScreen = () => {
         Alert.alert("ENZIRA", "Máximo 3 fotos por producto.");
         return;
     }
-
     let resultado = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [3, 4],
       quality: 0.7,
     });
-
     if (!resultado.canceled) {
       setImagenes([...imagenes, resultado.assets[0].uri]);
     }
@@ -94,11 +116,10 @@ export const AdminScreen = () => {
     const nuevaLista = [...imagenes];
     nuevaLista.splice(index, 1);
     setImagenes(nuevaLista);
-    // Si borramos la que era principal, reseteamos a la primera disponible
     if (fotoPrincipal === index) setFotoPrincipal(0);
   };
 
-  // --- 3. LÓGICA DE GUARDADO CON REORDENAMIENTO ---
+  // --- 3. LÓGICA DE GUARDADO ---
   const ejecutarGuardado = async () => {
     const categoriaFinal = categoria === 'Accesorios' ? categoriaPersonalizada : categoria;
 
@@ -110,11 +131,10 @@ export const AdminScreen = () => {
     setCargando(true);
 
     try {
-      // 1. Subida a Cloudinary
+      // Subida paralela a Cloudinary
       const urlsSubidas = await Promise.all(
         imagenes.map(async (uri) => {
           if (uri.startsWith('http')) return uri;
-
           const data = new FormData();
           if (Platform.OS === 'web') {
             const res = await fetch(uri);
@@ -128,16 +148,15 @@ export const AdminScreen = () => {
             method: 'POST',
             body: data,
           });
-          
           const file = await cloudRes.json();
           return file.secure_url.replace('/upload/', '/upload/f_auto,q_auto/');
         })
       );
 
-      // 2. ✨ TRUCO DE ANALISTA: Reordenar el array según la elección de Mariel
+      // Reordenar para que la principal sea el índice 0
       const urlsFinales = [...urlsSubidas];
       const [fotoElegida] = urlsFinales.splice(fotoPrincipal, 1);
-      urlsFinales.unshift(fotoElegida); // La elegida ahora es la posición 0 (Portada)
+      urlsFinales.unshift(fotoElegida);
 
       const payload = { 
         nombre: nombre.trim(), 
@@ -150,15 +169,13 @@ export const AdminScreen = () => {
 
       if (idEdicion) {
         await updateDoc(doc(db, 'productos', idEdicion), payload);
-        Alert.alert("ÉXITO", "Tienda actualizada correctamente.");
+        Alert.alert("ÉXITO", "Producto actualizado correctamente.", [{ text: "OK", onPress: () => limpiarYSalir() }]);
       } else {
         await addDoc(collection(db, 'productos'), { ...payload, fechaCreacion: new Date().toISOString() });
-        Alert.alert("ÉXITO", "Producto publicado con éxito.");
+        Alert.alert("ÉXITO", "Nuevo artículo publicado con éxito.", [{ text: "OK", onPress: () => limpiarYSalir() }]);
       }
-      limpiarYSalir();
     } catch (e) {
-      Alert.alert("ERROR", "Hubo un fallo en la subida.");
-    } finally {
+      Alert.alert("ERROR", "No se pudo procesar la subida.");
       setCargando(false);
     }
   };
@@ -167,6 +184,13 @@ export const AdminScreen = () => {
     setIdEdicion(null); setNombre(''); setPrecio(''); setStock(''); setDescripcion('');
     setCategoria('Carteras'); setCategoriaPersonalizada(''); setImagenes([]);
     setFotoPrincipal(0); setVista('lista'); obtenerProductos();
+  };
+
+  const confirmarBorrado = (id: string) => {
+    Alert.alert("ENZIRA", "¿Eliminar producto definitivamente?", [
+      { text: "Cancelar" },
+      { text: "Eliminar", onPress: async () => { await deleteDoc(doc(db, 'productos', id)); obtenerProductos(); }, style: 'destructive' }
+    ]);
   };
 
   return (
@@ -191,7 +215,7 @@ export const AdminScreen = () => {
         />
       </View>
 
-      {/* VISTA: LISTA DE PRODUCTOS */}
+      {/* VISTA: LISTA */}
       {vista === 'lista' && (
         <FlatList
           data={productos}
@@ -206,18 +230,20 @@ export const AdminScreen = () => {
                 description={`${item.categoria} | $${item.precio}`}
                 left={() => <Image source={{ uri: item.imagenes ? item.imagenes[0] : item.imagen }} style={styles.miniImg} />}
                 right={() => (
-                  <IconButton icon="pencil-outline" iconColor={theme.primary} onPress={() => {
-                    setIdEdicion(item.id); setNombre(item.nombre); setPrecio(item.precio.toString());
-                    setStock(item.stock?.toString() || '0'); setDescripcion(item.descripcion || '');
-                    setImagenes(item.imagenes || [item.imagen]);
-                    setFotoPrincipal(0); // Al editar, la 0 siempre es la portada guardada
-                    if(['Carteras', 'Mochilas', 'Billeteras'].includes(item.categoria)) {
-                        setCategoria(item.categoria); setCategoriaPersonalizada('');
-                    } else {
-                        setCategoria('Accesorios'); setCategoriaPersonalizada(item.categoria);
-                    }
-                    setVista('formulario');
-                  }} />
+                  <View style={{ flexDirection: 'row' }}>
+                    <IconButton icon="pencil-outline" iconColor={theme.primary} onPress={() => {
+                        setIdEdicion(item.id); setNombre(item.nombre); setPrecio(item.precio.toString());
+                        setStock(item.stock?.toString() || '0'); setDescripcion(item.descripcion || '');
+                        setImagenes(item.imagenes || [item.imagen]); setFotoPrincipal(0);
+                        if(['Carteras', 'Mochilas', 'Billeteras'].includes(item.categoria)) {
+                            setCategoria(item.categoria); setCategoriaPersonalizada('');
+                        } else {
+                            setCategoria('Accesorios'); setCategoriaPersonalizada(item.categoria);
+                        }
+                        setVista('formulario');
+                    }} />
+                    <IconButton icon="trash-can-outline" iconColor="#B00020" onPress={() => confirmarBorrado(item.id)} />
+                  </View>
                 )}
               />
             </Surface>
@@ -235,22 +261,13 @@ export const AdminScreen = () => {
               <TouchableOpacity 
                 key={index} 
                 onPress={() => setFotoPrincipal(index)}
-                style={[
-                    styles.wrapperImagen, 
-                    fotoPrincipal === index && { borderColor: theme.secondary, borderWidth: 2, borderRadius: 5 }
-                ]}
+                style={[styles.wrapperImagen, fotoPrincipal === index && { borderColor: theme.secondary, borderWidth: 2, borderRadius: 5 }]}
               >
                 <Image source={{ uri }} style={styles.previewChica} />
                 {fotoPrincipal === index && (
                   <Badge size={20} style={[styles.badgeEstrella, { backgroundColor: theme.secondary }]}>⭐</Badge>
                 )}
-                <IconButton 
-                    icon="close-circle" 
-                    size={18} 
-                    iconColor="red" 
-                    style={styles.btnBorrarImg} 
-                    onPress={() => eliminarImagenDeLista(index)} 
-                />
+                <IconButton icon="close-circle" size={18} iconColor="red" style={styles.btnBorrarImg} onPress={() => eliminarImagenDeLista(index)} />
               </TouchableOpacity>
             ))}
             {imagenes.length < 3 && (
@@ -271,7 +288,7 @@ export const AdminScreen = () => {
           />
 
           {categoria === 'Accesorios' && (
-              <TextInput label="Nueva categoría" value={categoriaPersonalizada} onChangeText={setCategoriaPersonalizada} mode="outlined" style={styles.input} outlineColor={theme.primary} />
+              <TextInput label="¿Qué accesorio es?" value={categoriaPersonalizada} onChangeText={setCategoriaPersonalizada} mode="outlined" style={styles.input} outlineColor={theme.primary} />
           )}
 
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -280,7 +297,7 @@ export const AdminScreen = () => {
           </View>
 
           <TextInput 
-            label="Detalles y Medidas" 
+            label="Detalles, Medidas y Características" 
             value={descripcion} 
             onChangeText={setDescripcion} 
             mode="outlined" 
@@ -290,14 +307,14 @@ export const AdminScreen = () => {
             outlineColor={theme.primary} 
           />
           
-          <Button mode="contained" onPress={ejecutarGuardado} loading={cargando} style={styles.btnMain} buttonColor={theme.primary} textColor={theme.onPrimary}>
+          <Button mode="contained" onPress={ejecutarGuardado} loading={cargando} disabled={cargando} style={styles.btnMain} buttonColor={theme.primary} textColor={theme.onPrimary}>
             {idEdicion ? "ACTUALIZAR ARTÍCULO" : "PUBLICAR EN TIENDA"}
           </Button>
           <Button mode="text" textColor={theme.primary} onPress={limpiarYSalir}>CANCELAR</Button>
         </ScrollView>
       )}
 
-      {/* VISTAS DE CONFIG Y PEDIDOS */}
+      {/* VISTA: CONFIG */}
       {vista === 'config' && (
         <ScrollView contentContainerStyle={styles.formContainer}>
           <Card style={[styles.orderCard, { borderLeftColor: theme.secondary }]}>
@@ -305,10 +322,7 @@ export const AdminScreen = () => {
             <Card.Content>
               <SegmentedButtons
                 value={estacionActual}
-                onValueChange={async (v) => {
-                    await updateDoc(doc(db, 'configuracion', 'apariencia'), { estacionActual: v });
-                    setSnackbarVisible(true);
-                }}
+                onValueChange={async (v) => { await updateDoc(doc(db, 'configuracion', 'apariencia'), { estacionActual: v }); setSnackbarVisible(true); }}
                 buttons={[{ value: 'otoño', label: '🍂' }, { value: 'invierno', label: '❄️' }, { value: 'primavera', label: '🌸' }, { value: 'verano', label: '☀️' }]}
                 theme={{ colors: { secondaryContainer: theme.secondary, onSecondaryContainer: theme.primary } }}
               />
@@ -317,39 +331,24 @@ export const AdminScreen = () => {
         </ScrollView>
       )}
 
-      {vista === 'pedidos' && (
-        <FlatList
-          data={pedidos}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <Card style={[styles.orderCard, { borderLeftColor: theme.secondary, margin: 10 }]}>
-              <Card.Content>
-                <Text style={{ fontWeight: 'bold', color: theme.primary }}>{item.clienteEmail}</Text>
-                <Divider style={{ marginVertical: 10 }} />
-                {item.items?.map((p: any, i: number) => <Text key={i}>• {p.nombre} (x{p.cantidad})</Text>)}
-                <Text style={{ textAlign: 'right', fontWeight: 'bold', fontSize: 18 }}>TOTAL: ${item.total}</Text>
-              </Card.Content>
-            </Card>
-          )}
-        />
-      )}
-
-      <Snackbar visible={snackbarVisible} onDismiss={() => setSnackbarVisible(false)} duration={2000} style={{ backgroundColor: theme.primary }}>
-        ✨ ¡Tienda actualizada!
-      </Snackbar>
+      <Portal>
+        <Snackbar visible={snackbarVisible} onDismiss={() => setSnackbarVisible(false)} duration={2000} style={{ backgroundColor: theme.primary }}>
+          ✨ Tienda actualizada con éxito.
+        </Snackbar>
+      </Portal>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: Platform.OS === 'ios' ? 50 : 20, paddingBottom: 15, paddingHorizontal: 10 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 40, paddingBottom: 15, paddingHorizontal: 10 },
   tituloHeader: { fontSize: 16, fontWeight: 'bold', letterSpacing: 4 },
   formContainer: { padding: 25 },
   multiImageContainer: { flexDirection: 'row', marginBottom: 20, marginTop: 10 },
   wrapperImagen: { position: 'relative', marginRight: 15, padding: 2 },
   previewChica: { width: 80, height: 100, borderRadius: 5 },
-  badgeEstrella: { position: 'absolute', top: -10, left: -10 },
+  badgeEstrella: { position: 'absolute', top: -10, left: -10, zIndex: 10 },
   btnBorrarImg: { position: 'absolute', bottom: -15, right: -15 },
   btnAgregarImg: { width: 80, height: 100, borderStyle: 'dashed', borderWidth: 1, justifyContent: 'center', alignItems: 'center', borderRadius: 5 },
   input: { marginBottom: 15, backgroundColor: '#fff' },
