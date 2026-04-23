@@ -57,8 +57,17 @@ export const AdminScreen = () => {
   const [imagenes, setImagenes] = useState<string[]>([]);
   const [fotoPrincipal, setFotoPrincipal] = useState(0); 
 
-  // --- 1. LÓGICA DE ESTACIÓN ---
-  const [estacionActual, setEstacionActual] = useState('');
+  // --- 🛠️ FUNCIÓN DE ALERTA HÍBRIDA (WEB + MOBILE) ---
+  const mostrarMensaje = (titulo: string, mensaje: string, accion?: () => void) => {
+    if (Platform.OS === 'web') {
+      // En Web usamos el alert nativo del navegador
+      window.alert(`${titulo}: ${mensaje}`);
+      if (accion) accion();
+    } else {
+      // En móvil usamos el Alert prolijo de React Native
+      Alert.alert(titulo, mensaje, [{ text: "OK", onPress: accion }]);
+    }
+  };
 
   useEffect(() => {
     const unsubTheme = onSnapshot(doc(db, 'configuracion', 'apariencia'), (docSnap) => {
@@ -68,7 +77,8 @@ export const AdminScreen = () => {
     return () => unsubTheme();
   }, []);
 
-  // --- 2. CARGA DE DATOS ---
+  const [estacionActual, setEstacionActual] = useState('');
+
   const obtenerProductos = async () => {
     setCargando(true);
     try {
@@ -98,7 +108,7 @@ export const AdminScreen = () => {
 
   const seleccionarImagen = async () => {
     if (imagenes.length >= 3) {
-        Alert.alert("ENZIRA", "Máximo 3 fotos por producto.");
+        mostrarMensaje("ENZIRA", "Máximo 3 fotos por producto.");
         return;
     }
     let resultado = await ImagePicker.launchImageLibraryAsync({
@@ -119,19 +129,17 @@ export const AdminScreen = () => {
     if (fotoPrincipal === index) setFotoPrincipal(0);
   };
 
-  // --- 3. LÓGICA DE GUARDADO ---
   const ejecutarGuardado = async () => {
     const categoriaFinal = categoria === 'Accesorios' ? categoriaPersonalizada : categoria;
 
     if (!nombre || !precio || imagenes.length === 0 || !categoriaFinal) {
-      Alert.alert("ENZIRA", "Faltan datos o fotos para publicar.");
+      mostrarMensaje("ENZIRA", "Faltan datos o fotos para publicar.");
       return;
     }
 
     setCargando(true);
 
     try {
-      // Subida paralela a Cloudinary
       const urlsSubidas = await Promise.all(
         imagenes.map(async (uri) => {
           if (uri.startsWith('http')) return uri;
@@ -153,7 +161,6 @@ export const AdminScreen = () => {
         })
       );
 
-      // Reordenar para que la principal sea el índice 0
       const urlsFinales = [...urlsSubidas];
       const [fotoElegida] = urlsFinales.splice(fotoPrincipal, 1);
       urlsFinales.unshift(fotoElegida);
@@ -169,14 +176,16 @@ export const AdminScreen = () => {
 
       if (idEdicion) {
         await updateDoc(doc(db, 'productos', idEdicion), payload);
-        Alert.alert("ÉXITO", "Producto actualizado correctamente.", [{ text: "OK", onPress: () => limpiarYSalir() }]);
+        setCargando(false); // Bajamos el spinner antes del aviso
+        mostrarMensaje("ÉXITO", "Producto actualizado correctamente.", () => limpiarYSalir());
       } else {
         await addDoc(collection(db, 'productos'), { ...payload, fechaCreacion: new Date().toISOString() });
-        Alert.alert("ÉXITO", "Nuevo artículo publicado con éxito.", [{ text: "OK", onPress: () => limpiarYSalir() }]);
+        setCargando(false);
+        mostrarMensaje("ÉXITO", "Nuevo artículo publicado con éxito.", () => limpiarYSalir());
       }
     } catch (e) {
-      Alert.alert("ERROR", "No se pudo procesar la subida.");
       setCargando(false);
+      mostrarMensaje("ERROR", "No se pudo procesar la subida.");
     }
   };
 
@@ -187,10 +196,16 @@ export const AdminScreen = () => {
   };
 
   const confirmarBorrado = (id: string) => {
-    Alert.alert("ENZIRA", "¿Eliminar producto definitivamente?", [
-      { text: "Cancelar" },
-      { text: "Eliminar", onPress: async () => { await deleteDoc(doc(db, 'productos', id)); obtenerProductos(); }, style: 'destructive' }
-    ]);
+    if (Platform.OS === 'web') {
+        if (confirm("¿Eliminar producto definitivamente?")) {
+            deleteDoc(doc(db, 'productos', id)).then(() => obtenerProductos());
+        }
+    } else {
+        Alert.alert("ENZIRA", "¿Eliminar producto?", [
+          { text: "Cancelar" },
+          { text: "Eliminar", onPress: async () => { await deleteDoc(doc(db, 'productos', id)); obtenerProductos(); }, style: 'destructive' }
+        ]);
+    }
   };
 
   return (
@@ -215,7 +230,6 @@ export const AdminScreen = () => {
         />
       </View>
 
-      {/* VISTA: LISTA */}
       {vista === 'lista' && (
         <FlatList
           data={productos}
@@ -251,7 +265,6 @@ export const AdminScreen = () => {
         />
       )}
 
-      {/* VISTA: FORMULARIO */}
       {vista === 'formulario' && (
         <ScrollView contentContainerStyle={styles.formContainer} keyboardShouldPersistTaps="handled">
           
@@ -314,7 +327,6 @@ export const AdminScreen = () => {
         </ScrollView>
       )}
 
-      {/* VISTA: CONFIG */}
       {vista === 'config' && (
         <ScrollView contentContainerStyle={styles.formContainer}>
           <Card style={[styles.orderCard, { borderLeftColor: theme.secondary }]}>
@@ -333,7 +345,7 @@ export const AdminScreen = () => {
 
       <Portal>
         <Snackbar visible={snackbarVisible} onDismiss={() => setSnackbarVisible(false)} duration={2000} style={{ backgroundColor: theme.primary }}>
-          ✨ Tienda actualizada con éxito.
+          ✨ Configuración guardada.
         </Snackbar>
       </Portal>
     </View>
