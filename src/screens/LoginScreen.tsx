@@ -1,92 +1,95 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, ScrollView, Platform, Dimensions, Alert, TouchableOpacity } from 'react-native';
-import { Text, TextInput, Button, IconButton } from 'react-native-paper';
+import { View, StyleSheet, ScrollView, Platform, Dimensions, TouchableOpacity } from 'react-native';
+import { Text, TextInput, Button, IconButton, Snackbar, Portal } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 
-// Firebase
+// Firebase y Tema
 import { auth, db } from '../services/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
+import { useAppTheme } from '../context/ThemeContext'; // <--- IMPORTANTE
 
 const { width } = Dimensions.get('window');
 const esWeb = Platform.OS === 'web' && width > 768;
 
 export const LoginScreen = () => {
   const navigation = useNavigation<any>();
+  const { theme } = useAppTheme(); // <--- COLORES DINÁMICOS
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [verPassword, setVerPassword] = useState(false);
   const [cargando, setCargando] = useState(false);
-  
-  // --- FIX 1: Estado para alternar entre Login y Registro ---
   const [esRegistro, setEsRegistro] = useState(false);
+
+  // Estados para el aviso elegante
+  const [snackVisible, setSnackVisible] = useState(false);
+  const [msjSnack, setMsjSnack] = useState('');
+
+  const dispararAviso = (texto: string) => {
+    setMsjSnack(texto);
+    setSnackVisible(true);
+  };
 
   const manejarAutenticacion = async () => {
     if (!email || !password) {
-      const msj = "Por favor, completá todos los campos.";
-      esWeb ? alert(msj) : Alert.alert("ENZIRA", msj);
+      dispararAviso("Por favor, completá todos los campos ✨");
       return;
     }
     
     setCargando(true);
     try {
       if (esRegistro) {
-        // --- LÓGICA DE REGISTRO PARA NUEVOS CLIENTES ---
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        
-        // Guardamos el perfil en Firestore con rol 'cliente' por defecto
         await setDoc(doc(db, 'usuarios', userCredential.user.uid), {
           email: email,
           rol: 'cliente',
           fechaCreado: new Date()
         });
-        
-        const msjOk = "Cuenta creada con éxito. ¡Bienvenida a ENZIRA!";
-        esWeb ? alert(msjOk) : Alert.alert("ENZIRA", msjOk);
+        dispararAviso("¡Bienvenida a ENZIRA! Cuenta creada con éxito.");
       } else {
-        // --- LÓGICA DE LOGIN ---
         await signInWithEmailAndPassword(auth, email, password);
       }
       
-      navigation.navigate('Home'); 
+      // Esperamos un poquito si es registro para que vea el mensaje
+      setTimeout(() => {
+        navigation.navigate('Home'); 
+      }, esRegistro ? 1500 : 0);
+
     } catch (error: any) {
-      console.log(error.code);
       let mensaje = "Error en la autenticación.";
-      
       if (error.code === 'auth/email-already-in-use') mensaje = "Este email ya está registrado.";
       if (error.code === 'auth/invalid-credential') mensaje = "Credenciales incorrectas.";
       if (error.code === 'auth/weak-password') mensaje = "La contraseña debe tener al menos 6 caracteres.";
-
-      esWeb ? alert(mensaje) : Alert.alert("SISTEMA", mensaje);
+      
+      dispararAviso(mensaje);
     } finally {
       setCargando(false);
     }
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
       <IconButton 
         icon="close" 
         style={styles.botonCerrar} 
         onPress={() => navigation.goBack()} 
-        iconColor="#002147"
+        iconColor={theme.primary}
       />
 
       <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.cardLogin}>
+        <View style={[styles.cardLogin, { backgroundColor: esWeb ? theme.background : 'transparent' }]}>
           
           <View style={styles.header}>
-            <Text style={styles.logo}>ENZIRA</Text>
-            <Text style={styles.subtitulo}>ALTA COSTURA</Text>
-            <View style={styles.lineaDecorativa} />
+            <Text style={[styles.logo, { color: theme.primary }]}>ENZIRA</Text>
+            <Text style={[styles.subtitulo, { color: theme.secondary }]}>ALTA COSTURA</Text>
+            <View style={[styles.lineaDecorativa, { backgroundColor: theme.secondary }]} />
           </View>
 
-          {/* FIX 2: Títulos dinámicos según el modo */}
-          <Text style={styles.bienvenida}>
+          <Text style={[styles.bienvenida, { color: theme.primary }]}>
             {esRegistro ? 'CREAR CUENTA' : 'MI CUENTA'}
           </Text>
-          <Text style={styles.instruccion}>
+          <Text style={[styles.instruccion, { color: theme.secondary }]}>
             {esRegistro 
               ? 'REGISTRATE PARA FINALIZAR TUS COMPRAS' 
               : 'ACCESO PARA CLIENTES Y GESTIÓN'}
@@ -100,10 +103,10 @@ export const LoginScreen = () => {
               mode="outlined"
               keyboardType="email-address"
               autoCapitalize="none"
-              outlineColor="#002147"
-              activeOutlineColor="#CFAF68"
+              outlineColor={theme.primary}
+              activeOutlineColor={theme.secondary}
               style={styles.input}
-              textColor="#002147"
+              textColor={theme.text}
             />
 
             <TextInput
@@ -112,10 +115,10 @@ export const LoginScreen = () => {
               onChangeText={setPassword}
               mode="outlined"
               secureTextEntry={!verPassword}
-              outlineColor="#002147"
-              activeOutlineColor="#CFAF68"
+              outlineColor={theme.primary}
+              activeOutlineColor={theme.secondary}
               style={styles.input}
-              textColor="#002147"
+              textColor={theme.text}
               right={
                 <TextInput.Icon 
                   icon={verPassword ? "eye-off" : "eye"} 
@@ -130,18 +133,17 @@ export const LoginScreen = () => {
               loading={cargando}
               disabled={cargando}
               style={styles.boton}
-              buttonColor="#002147"
-              labelStyle={styles.labelBoton}
+              buttonColor={theme.primary}
+              labelStyle={[styles.labelBoton, { color: theme.onPrimary }]}
             >
               {esRegistro ? 'REGISTRARME AHORA' : 'INGRESAR'}
             </Button>
 
-            {/* FIX 3: Link para alternar modo */}
             <TouchableOpacity 
                 onPress={() => setEsRegistro(!esRegistro)} 
                 style={styles.switchCont}
             >
-                <Text style={styles.switchTexto}>
+                <Text style={[styles.switchTexto, { color: theme.primary }]}>
                     {esRegistro 
                         ? '¿Ya tenés cuenta? Iniciá sesión' 
                         : '¿No tenés cuenta? Registrate aquí'}
@@ -149,39 +151,55 @@ export const LoginScreen = () => {
             </TouchableOpacity>
 
             <View style={styles.footerInfo}>
-              <Text style={styles.copyright}>© 2026 ENZIRA. Alta Costura Salta.</Text>
+              <Text style={[styles.copyright, { color: theme.primary }]}>© 2026 ENZIRA. Alta Costura Salta.</Text>
             </View>
           </View>
         </View>
       </ScrollView>
+
+      {/* --- EL AVISO ELEGANTE --- */}
+      <Portal>
+        <Snackbar
+            visible={snackVisible}
+            onDismiss={() => setSnackVisible(false)}
+            duration={3000}
+            style={{ backgroundColor: theme.primary }}
+            action={{
+                label: 'OK',
+                textColor: theme.onPrimary,
+                onPress: () => setSnackVisible(false),
+            }}
+        >
+            <Text style={{ color: theme.onPrimary }}>{msjSnack}</Text>
+        </Snackbar>
+      </Portal>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFAED' },
+  container: { flex: 1 },
   scroll: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
   botonCerrar: { position: 'absolute', top: 40, right: 20, zIndex: 10 },
   cardLogin: {
     width: '100%',
     maxWidth: 450,
     padding: esWeb ? 60 : 25,
-    backgroundColor: esWeb ? '#fff' : 'transparent',
     borderWidth: esWeb ? 1 : 0,
     borderColor: '#eee'
   },
   header: { alignItems: 'center', marginBottom: 50 },
-  logo: { fontSize: 42, fontWeight: 'bold', color: '#002147', letterSpacing: 10 },
-  subtitulo: { fontSize: 10, color: '#CFAF68', letterSpacing: 4, fontWeight: 'bold', marginTop: 5 },
-  lineaDecorativa: { width: 40, height: 1, backgroundColor: '#CFAF68', marginTop: 15 },
-  bienvenida: { fontSize: 22, fontWeight: 'bold', color: '#002147', textAlign: 'center', letterSpacing: 3 },
-  instruccion: { fontSize: 11, color: '#CFAF68', fontWeight: 'bold', textAlign: 'center', marginBottom: 40, marginTop: 10, textTransform: 'uppercase', letterSpacing: 1 },
+  logo: { fontSize: 42, fontWeight: 'bold', letterSpacing: 10 },
+  subtitulo: { fontSize: 10, letterSpacing: 4, fontWeight: 'bold', marginTop: 5 },
+  lineaDecorativa: { width: 40, height: 1, marginTop: 15 },
+  bienvenida: { fontSize: 22, fontWeight: 'bold', textAlign: 'center', letterSpacing: 3 },
+  instruccion: { fontSize: 11, fontWeight: 'bold', textAlign: 'center', marginBottom: 40, marginTop: 10, textTransform: 'uppercase', letterSpacing: 1 },
   form: { width: '100%' },
   input: { marginBottom: 15, backgroundColor: '#fff' },
   boton: { borderRadius: 0, paddingVertical: 10, marginTop: 15 },
-  labelBoton: { fontWeight: 'bold', letterSpacing: 2, fontSize: 14, color: '#FFFAED' },
+  labelBoton: { fontWeight: 'bold', letterSpacing: 2, fontSize: 14 },
   switchCont: { marginTop: 25, alignItems: 'center' },
-  switchTexto: { color: '#002147', fontWeight: 'bold', fontSize: 12, textDecorationLine: 'underline', opacity: 0.7 },
+  switchTexto: { fontWeight: 'bold', fontSize: 12, textDecorationLine: 'underline', opacity: 0.7 },
   footerInfo: { marginTop: 40, alignItems: 'center' },
-  copyright: { fontSize: 9, color: '#002147', opacity: 0.3, letterSpacing: 1 }
+  copyright: { fontSize: 9, opacity: 0.3, letterSpacing: 1 }
 });
