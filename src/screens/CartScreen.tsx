@@ -4,7 +4,7 @@ import { Text, Button, IconButton, Divider, Surface } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { useCart } from '../context/CartContext';
 
-// Importamos Firebase para guardar el pedido como respaldo
+// Importamos Firebase
 import { auth, db } from '../services/firebase';
 import { collection, addDoc } from 'firebase/firestore';
 
@@ -17,7 +17,6 @@ export const CartScreen = () => {
   const manejarFinalizarCompra = async () => {
     if (cart.length === 0) return;
 
-    // 1. Verificación de Seguridad
     const usuarioActual = auth.currentUser;
     if (!usuarioActual) {
       Alert.alert("ENZIRA", "Por favor, iniciá sesión para completar tu pedido.");
@@ -25,7 +24,7 @@ export const CartScreen = () => {
       return;
     }
 
-    // 2. Armar el mensaje para Mariel
+    // 1. Armar el mensaje para WhatsApp
     let mensaje = `✨ *NUEVO PEDIDO - ENZIRA ALTA COSTURA* ✨\n\n`;
     mensaje += `*Cliente:* ${usuarioActual.email}\n`;
     mensaje += `----------------------------------\n`;
@@ -40,29 +39,46 @@ export const CartScreen = () => {
     mensaje += `💰 *TOTAL: $${totalAmount.toFixed(2)}*\n\n`;
     mensaje += `_Enviado desde la App Oficial_`;
 
-    // 3. Guardar en Firebase (Backup para el panel de Admin)
     try {
+      // 2. Guardar en Firebase (Registro para Mariel y para el Historial del Cliente)
       await addDoc(collection(db, 'pedidos'), {
         clienteEmail: usuarioActual.email,
+        clienteUid: usuarioActual.uid, // <--- Importante para que el cliente vea sus pedidos
         items: cart,
         total: totalAmount,
         estado: 'Pendiente',
         fecha: new Date()
       });
-    } catch (e) {
-      console.log("Error al guardar respaldo del pedido");
-    }
 
-    // 4. Redirigir a WhatsApp (Número actualizado de Mariel)
-const url = `https://wa.me/5493873001475?text=${encodeURIComponent(mensaje)}`;
-    Linking.openURL(url).catch(() => {
-      Alert.alert("Error", "No pudimos abrir WhatsApp. Asegurate de tenerlo instalado.");
-    });
+      // 3. Abrir WhatsApp
+      const url = `https://wa.me/5493873001475?text=${encodeURIComponent(mensaje)}`;
+      
+      Linking.openURL(url).then(() => {
+          // 4. LIMPIEZA POST-VENTA (Esto ocurre cuando vuelve a la app)
+          clearCart(); 
+          
+          // 5. AVISO DE ÉXITO Y NAVEGACIÓN
+          Alert.alert(
+            "¡PEDIDO REGISTRADO! ✨",
+            "Tu pedido fue enviado a Mariel. Podrás ver el seguimiento en tu perfil.",
+            [{ text: "VOLVER AL INICIO", onPress: () => navigation.navigate('Home') }]
+          );
+      }).catch(() => {
+        Alert.alert("Error", "No pudimos abrir WhatsApp automáticamente.");
+      });
+
+    } catch (e) {
+      Alert.alert("ERROR", "Hubo un problema al registrar el pedido en el sistema.");
+    }
   };
 
   const renderItem = ({ item }: { item: any }) => (
     <Surface style={styles.itemTarjeta} elevation={0}>
-      <Image source={{ uri: item.imagen }} style={styles.imagenItem} />
+      {/* Soporte para el nuevo formato de array de imágenes */}
+      <Image 
+        source={{ uri: item.imagenes ? item.imagenes[0] : item.imagen }} 
+        style={styles.imagenItem} 
+      />
       
       <View style={styles.infoItem}>
         <Text style={styles.nombreItem}>{item.nombre.toUpperCase()}</Text>
@@ -153,7 +169,7 @@ const url = `https://wa.me/5493873001475?text=${encodeURIComponent(mensaje)}`;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFFAED' },
-  listContent: { padding: 20, paddingBottom: 120 },
+  listContent: { padding: 20, paddingBottom: 150 },
   tituloHeader: { fontSize: 12, fontWeight: 'bold', color: '#002147', letterSpacing: 3, marginBottom: 25, textAlign: 'center', opacity: 0.5 },
   itemTarjeta: { flexDirection: 'row', backgroundColor: '#fff', padding: 12, marginBottom: 15, alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#f1f1f1' },
   imagenItem: { width: 70, height: 90, resizeMode: 'cover' },
@@ -164,7 +180,7 @@ const styles = StyleSheet.create({
   cantidadTexto: { fontSize: 14, fontWeight: 'bold', color: '#002147', width: 25, textAlign: 'center' },
   derechaItem: { alignItems: 'flex-end' },
   subtotalItem: { fontSize: 14, fontWeight: 'bold', color: '#002147' },
-  footerResumen: { position: 'absolute', bottom: 0, width: '100%', backgroundColor: '#fff', padding: 25, borderTopLeftRadius: 0, borderTopRightRadius: 0 },
+  footerResumen: { position: 'absolute', bottom: 0, width: '100%', backgroundColor: '#fff', padding: 25 },
   filaResumen: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   totalEtiqueta: { fontSize: 11, fontWeight: 'bold', color: '#002147', letterSpacing: 2, opacity: 0.4 },
   totalMonto: { fontSize: 24, fontWeight: 'bold', color: '#002147' },
