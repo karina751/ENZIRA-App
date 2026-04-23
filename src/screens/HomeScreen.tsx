@@ -93,7 +93,6 @@ export const HomeScreen = () => {
     }
   };
 
-  // Footer se puede quedar como función porque no tiene inputs
   const FooterApp = () => (
     <View style={[styles.footerContainer, { backgroundColor: theme.background }]}>
       <Divider style={[styles.dividerFooter, { backgroundColor: theme.secondary }]} />
@@ -113,7 +112,6 @@ export const HomeScreen = () => {
           <ActivityIndicator size="large" color={theme.primary} style={{ flex: 1, marginTop: 50 }} />
         ) : (
           <FlatList 
-            // FIX: Pasamos el JSX directo para evitar que el buscador pierda el foco
             ListHeaderComponent={
               <View style={[styles.headerContainer, { backgroundColor: theme.background }]}>
                 <View style={styles.logoRow}>
@@ -182,7 +180,16 @@ export const HomeScreen = () => {
                 onPress={() => navigation.navigate('ProductDetail', { producto: item })}
               >
                 <View style={styles.contenedorImagen}>
-                  <Image source={{ uri: item.imagen }} style={styles.imagenTarjeta} resizeMode="cover" />
+                  {/* ✨ CAMBIO CLAVE: Mostramos la primera imagen del array (Portada) */}
+                  <Image 
+                    source={{ 
+                        uri: (item.imagenes && item.imagenes.length > 0) 
+                             ? item.imagenes[0] 
+                             : item.imagen 
+                    }} 
+                    style={styles.imagenTarjeta} 
+                    resizeMode="cover" 
+                  />
                 </View>
                 <View style={styles.contenidoTarjeta}>
                   <Text style={[styles.nombreProducto, { color: theme.text }]} numberOfLines={1}>
@@ -199,7 +206,6 @@ export const HomeScreen = () => {
         )}
       </View>
 
-      {/* DIÁLOGO PRO */}
       <Portal>
         <Dialog visible={mostrarDialog} onDismiss={() => setMostrarDialog(false)} style={{ backgroundColor: theme.background, borderRadius: 0 }}>
           <Dialog.Title style={{ color: theme.primary, letterSpacing: 2 }}>MI CUENTA</Dialog.Title>
