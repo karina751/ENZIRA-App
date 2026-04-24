@@ -13,7 +13,7 @@ import { Text, Divider } from 'react-native-paper';
 // Firebase
 import { auth, db } from '../services/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, onSnapshot, query } from 'firebase/firestore';
 
 // Pantallas
 import { HomeScreen } from '../screens/HomeScreen';
@@ -25,8 +25,37 @@ import { CartScreen } from '../screens/CartScreen';
 const Stack = createNativeStackNavigator();
 const Drawer = createDrawerNavigator();
 
+// --- ✨ COMPONENTE DE MENÚ DINÁMICO ✨ ---
 const CustomDrawerContent = (props: DrawerContentComponentProps) => {
-  const categorias = ['Todas', 'Carteras', 'Mochilas', 'Billeteras', 'Accesorios'];
+  const [categorias, setCategorias] = useState<string[]>(['Todas']);
+
+  useEffect(() => {
+    // Escuchamos la colección de productos en tiempo real
+    const q = query(collection(db, 'productos'));
+    const unsub = onSnapshot(q, (snapshot) => {
+      const catsSet = new Set<string>();
+      catsSet.add('Todas'); // La opción base siempre presente
+
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.categoria) {
+          // Agregamos la categoría al Set (evita duplicados automáticamente)
+          catsSet.add(data.categoria);
+        }
+      });
+
+      // Convertimos el Set a Array y lo ordenamos (para que no salten de lugar)
+      const listaFinal = Array.from(catsSet).sort((a, b) => {
+        if (a === 'Todas') return -1; // "Todas" siempre primero
+        if (b === 'Todas') return 1;
+        return a.localeCompare(b);
+      });
+
+      setCategorias(listaFinal);
+    });
+
+    return () => unsub();
+  }, []);
 
   return (
     <DrawerContentScrollView {...props} style={{ backgroundColor: '#FFFAED' }}>
@@ -36,6 +65,7 @@ const CustomDrawerContent = (props: DrawerContentComponentProps) => {
       </View>
       <Divider style={styles.divider} />
       <Text style={styles.seccionLabel}>CATEGORÍAS</Text>
+      
       {categorias.map((cat) => (
         <DrawerItem
           key={cat}
@@ -66,7 +96,6 @@ const MainStack = () => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       setUsuario(user);
       if (user) {
-        // Buscamos el rol del usuario en Firestore
         const docRef = doc(db, 'usuarios', user.uid);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
@@ -104,7 +133,6 @@ const MainStack = () => {
         }} 
       />
 
-      {/* 🔐 RUTA PROTEGIDA: Solo si el rol es 'admin' la pantalla existe en el Stack */}
       {rol === 'admin' && (
         <Stack.Screen 
           name="Admin" 
