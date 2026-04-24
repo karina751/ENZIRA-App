@@ -25,7 +25,7 @@ import {
   Portal,
   Dialog,
   Chip,
-  Switch // <--- NUEVO: Para la opción de cuotas
+  Switch 
 } from 'react-native-paper';
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
@@ -62,16 +62,14 @@ export const AdminScreen = () => {
   const [categoriaPersonalizada, setCategoriaPersonalizada] = useState(''); 
   const [imagenes, setImagenes] = useState<string[]>([]);
   const [fotoPrincipal, setFotoPrincipal] = useState(0); 
-  const [enCuotas, setEnCuotas] = useState(false); // <--- NUEVO ESTADO PARA CUOTAS
+  
+  // ✨ NUEVOS ESTADOS PARA CUOTAS DETALLADAS ✨
+  const [enCuotas, setEnCuotas] = useState(false);
+  const [cuotasNumero, setCuotasNumero] = useState('3'); 
+  const [cuotasValor, setCuotasValor] = useState('');
 
-  // --- 🛠️ FUNCIONES DE AVISO Y GESTIÓN ---
   const mostrarAviso = (titulo: string, mensaje: string, accion?: () => void, error = false) => {
-    setAvisoConfig({ 
-      titulo, 
-      mensaje, 
-      esError: error,
-      accion: accion ? accion : () => setAvisoVisible(false) 
-    });
+    setAvisoConfig({ titulo, mensaje, esError: error, accion: accion ? accion : () => setAvisoVisible(false) });
     setAvisoVisible(true);
   };
 
@@ -80,20 +78,19 @@ export const AdminScreen = () => {
   };
 
   const borrarPedido = (id: string) => {
-    mostrarAviso("BORRAR REGISTRO", "¿Eliminar pedido definitivamente?", async () => {
+    mostrarAviso("BORRAR REGISTRO", "¿Eliminar pedido?", async () => {
         await deleteDoc(doc(db, 'pedidos', id));
         setAvisoVisible(false);
     });
   };
 
   const confirmarBorrado = (id: string) => {
-    mostrarAviso("¿ELIMINAR PRODUCTO?", "Esta acción no se puede deshacer.", async () => {
+    mostrarAviso("¿ELIMINAR PRODUCTO?", "Esta acción es definitiva.", async () => {
         await deleteDoc(doc(db, 'productos', id));
         setAvisoVisible(false);
     });
   };
 
-  // --- 🔥 CARGA DE DATOS REAL TIME ---
   useEffect(() => {
     const unsubEstilo = onSnapshot(doc(db, 'configuracion', 'apariencia'), (docSnap) => {
       if (docSnap.exists()) setEstacionActual(docSnap.data().estacionActual);
@@ -116,10 +113,9 @@ export const AdminScreen = () => {
     return () => { unsubEstilo(); unsubProd(); unsubOrders(); };
   }, []);
 
-  // --- 📸 GESTIÓN DE IMÁGENES ---
   const seleccionarImagen = async () => {
     if (imagenes.length >= 3) {
-        mostrarAviso("ENZIRA", "Máximo 3 fotos por producto.");
+        mostrarAviso("ENZIRA", "Máximo 3 fotos.");
         return;
     }
     let resultado = await ImagePicker.launchImageLibraryAsync({
@@ -140,7 +136,6 @@ export const AdminScreen = () => {
     if (fotoPrincipal === index) setFotoPrincipal(0);
   };
 
-  // --- 💾 LÓGICA DE GUARDADO ---
   const ejecutarGuardado = async () => {
     const categoriaFinal = (categoria === 'OTRA') ? categoriaPersonalizada.trim() : categoria;
 
@@ -181,17 +176,19 @@ export const AdminScreen = () => {
         descripcion: descripcion.trim(),
         categoria: categoriaFinal,
         imagenes: urlsFinales,
-        enCuotas: enCuotas // <--- GUARDAMOS SI TIENE CUOTAS
+        enCuotas: enCuotas,
+        cuotasNumero: parseInt(cuotasNumero) || 3, // <--- GUARDAR NÚMERO
+        cuotasValor: parseFloat(cuotasValor) || 0  // <--- GUARDAR MONTO CUOTA
       };
 
       if (idEdicion) {
         await updateDoc(doc(db, 'productos', idEdicion), payload);
         setCargando(false);
-        mostrarAviso("✨ ÉXITO", "Producto actualizado.", () => limpiarYSalir());
+        mostrarAviso("✨ ÉXITO", "Tienda actualizada.", () => limpiarYSalir());
       } else {
         await addDoc(collection(db, 'productos'), { ...payload, fechaCreacion: new Date().toISOString() });
         setCargando(false);
-        mostrarAviso("✨ ÉXITO", "Artículo publicado.", () => limpiarYSalir());
+        mostrarAviso("✨ ÉXITO", "Producto publicado.", () => limpiarYSalir());
       }
     } catch (e) {
       setCargando(false);
@@ -202,7 +199,8 @@ export const AdminScreen = () => {
   const limpiarYSalir = () => {
     setIdEdicion(null); setNombre(''); setPrecio(''); setStock(''); setDescripcion('');
     setCategoria('Carteras'); setCategoriaPersonalizada(''); setImagenes([]);
-    setFotoPrincipal(0); setEnCuotas(false); setVista('lista'); setAvisoVisible(false);
+    setFotoPrincipal(0); setEnCuotas(false); setCuotasNumero('3'); setCuotasValor('');
+    setVista('lista'); setAvisoVisible(false);
   };
 
   return (
@@ -227,7 +225,6 @@ export const AdminScreen = () => {
         />
       </View>
 
-      {/* 1. VISTA LISTA (STOCK) */}
       {vista === 'lista' && (
         <FlatList
           data={productos}
@@ -249,18 +246,23 @@ export const AdminScreen = () => {
                   </View>
                 )}
                 right={() => (
-                  <IconButton icon="pencil-outline" iconColor={theme.primary} onPress={() => {
-                    setIdEdicion(item.id); setNombre(item.nombre); setPrecio(item.precio.toString());
-                    setStock(item.stock?.toString() || '0'); setDescripcion(item.descripcion || '');
-                    setImagenes(item.imagenes || [item.imagen]); setFotoPrincipal(0);
-                    setEnCuotas(item.enCuotas || false); // <--- CARGAMOS EL ESTADO AL EDITAR
-                    if(['Carteras', 'Mochilas', 'Billeteras'].includes(item.categoria)) {
-                        setCategoria(item.categoria); setCategoriaPersonalizada('');
-                    } else {
-                        setCategoria('OTRA'); setCategoriaPersonalizada(item.categoria);
-                    }
-                    setVista('formulario');
-                  }} />
+                  <View style={{ flexDirection: 'row' }}>
+                    <IconButton icon="pencil-outline" iconColor={theme.primary} onPress={() => {
+                        setIdEdicion(item.id); setNombre(item.nombre); setPrecio(item.precio.toString());
+                        setStock(item.stock?.toString() || '0'); setDescripcion(item.descripcion || '');
+                        setImagenes(item.imagenes || [item.imagen]); setFotoPrincipal(0);
+                        setEnCuotas(item.enCuotas || false);
+                        setCuotasNumero(item.cuotasNumero?.toString() || '3');
+                        setCuotasValor(item.cuotasValor?.toString() || '');
+                        if(['Carteras', 'Mochilas', 'Billeteras'].includes(item.categoria)) {
+                            setCategoria(item.categoria); setCategoriaPersonalizada('');
+                        } else {
+                            setCategoria('OTRA'); setCategoriaPersonalizada(item.categoria);
+                        }
+                        setVista('formulario');
+                    }} />
+                    <IconButton icon="trash-can-outline" iconColor="#B00020" onPress={() => confirmarBorrado(item.id)} />
+                  </View>
                 )}
               />
             </Surface>
@@ -268,7 +270,6 @@ export const AdminScreen = () => {
         />
       )}
 
-      {/* 2. VISTA PEDIDOS (Sin cambios relevantes) */}
       {vista === 'pedidos' && (
         <FlatList
           data={pedidos}
@@ -299,7 +300,6 @@ export const AdminScreen = () => {
         />
       )}
 
-      {/* 3. VISTA FORMULARIO (OPCIÓN CUOTAS ✨) */}
       {vista === 'formulario' && (
         <ScrollView contentContainerStyle={styles.formContainer} keyboardShouldPersistTaps="handled">
           <Text style={[styles.labelForm, { color: theme.primary }]}>FOTOS (TOCÁ PORTADA ⭐)</Text>
@@ -325,26 +325,44 @@ export const AdminScreen = () => {
           />
 
           {categoria === 'OTRA' && (
-              <TextInput label="Nueva categoría" value={categoriaPersonalizada} onChangeText={setCategoriaPersonalizada} mode="outlined" style={styles.input} outlineColor={theme.secondary} />
+              <TextInput label="Nombre de nueva categoría" value={categoriaPersonalizada} onChangeText={setCategoriaPersonalizada} mode="outlined" style={styles.input} outlineColor={theme.secondary} />
           )}
 
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <TextInput label="Precio" value={precio} onChangeText={setPrecio} keyboardType="numeric" mode="outlined" style={[styles.input, { width: '48%' }]} />
+            <TextInput label="Precio Total" value={precio} onChangeText={setPrecio} keyboardType="numeric" mode="outlined" style={[styles.input, { width: '48%' }]} />
             <TextInput label="Stock" value={stock} onChangeText={setStock} keyboardType="numeric" mode="outlined" style={[styles.input, { width: '48%' }]} />
           </View>
 
-          {/* ✨ NUEVO: SECTOR DE OPCIONES DE PAGO ✨ */}
+          {/* ✨ SECTOR CUOTAS ACTUALIZADO ✨ */}
           <Surface style={styles.cuotasRow} elevation={0}>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontWeight: 'bold', color: theme.primary, fontSize: 13 }}>HABILITAR CUOTAS</Text>
-                <Text style={{ fontSize: 10, color: theme.text, opacity: 0.6 }}>Muestra cartel de cuotas sin interés en la tienda.</Text>
+                <Text style={{ fontSize: 10, color: theme.text, opacity: 0.6 }}>Habilitar pago financiado para este artículo.</Text>
               </View>
-              <Switch 
-                value={enCuotas} 
-                onValueChange={setEnCuotas} 
-                color={theme.secondary} 
-              />
+              <Switch value={enCuotas} onValueChange={setEnCuotas} color={theme.secondary} />
           </Surface>
+
+          {enCuotas && (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 }}>
+               <TextInput 
+                  label="N° Cuotas" 
+                  value={cuotasNumero} 
+                  onChangeText={setCuotasNumero} 
+                  keyboardType="numeric" 
+                  mode="outlined" 
+                  style={{ width: '30%' }} 
+               />
+               <TextInput 
+                  label="Valor cada cuota" 
+                  value={cuotasValor} 
+                  onChangeText={setCuotasValor} 
+                  keyboardType="numeric" 
+                  mode="outlined" 
+                  style={{ width: '65%' }} 
+                  left={<TextInput.Affix text="$" />}
+               />
+            </View>
+          )}
 
           <TextInput label="Detalles Técnicos" value={descripcion} onChangeText={setDescripcion} mode="outlined" multiline numberOfLines={5} style={[styles.input, { height: 120 }]} outlineColor={theme.primary} />
           

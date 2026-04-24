@@ -17,7 +17,6 @@ export const ProductDetailScreen = () => {
 
   const [visible, setVisible] = useState(false);
 
-  // Lógica para el carrete: si no hay array de imágenes, usamos la imagen única antigua
   const listaImagenes = producto.imagenes && producto.imagenes.length > 0 
     ? producto.imagenes 
     : [producto.imagen];
@@ -29,7 +28,6 @@ export const ProductDetailScreen = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* BOTÓN VOLVER */}
       <IconButton 
         icon="arrow-left" 
         style={[styles.botonVolver, { backgroundColor: theme.background + 'CC' }]} 
@@ -40,23 +38,12 @@ export const ProductDetailScreen = () => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={esWeb ? styles.layoutWeb : styles.layoutMobile}>
           
-          {/* CARRETE DE IMÁGENES (Paging Enabled para efecto Carousel) */}
           <Surface style={styles.contenedorImagen} elevation={1}>
-            <ScrollView 
-              horizontal 
-              pagingEnabled 
-              showsHorizontalScrollIndicator={false}
-            >
+            <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
               {listaImagenes.map((img: string, index: number) => (
-                <Image 
-                  key={index} 
-                  source={{ uri: img }} 
-                  style={styles.imagen} 
-                />
+                <Image key={index} source={{ uri: img }} style={styles.imagen} />
               ))}
             </ScrollView>
-            
-            {/* Indicador visual simple si hay más de una foto */}
             {listaImagenes.length > 1 && (
               <View style={styles.indicadorContenedor}>
                  <Text style={[styles.indicadorTexto, { backgroundColor: theme.primary + 'AA', color: theme.onPrimary }]}>
@@ -66,7 +53,6 @@ export const ProductDetailScreen = () => {
             )}
           </Surface>
 
-          {/* INFORMACIÓN Y COMPRA */}
           <View style={styles.infoContainer}>
             <Text style={[styles.categoria, { color: theme.secondary }]}>
                 {producto.categoria.toUpperCase()}
@@ -76,12 +62,28 @@ export const ProductDetailScreen = () => {
             </Text>
             <View style={[styles.lineaDecorativa, { backgroundColor: theme.secondary }]} />
             
-            <Text style={[styles.precio, { color: theme.primary }]}>${producto.precio}</Text>
-            
-            {/* SECCIÓN DE DETALLES TÉCNICOS */}
-            <Text style={[styles.tituloSeccion, { color: theme.primary }]}>DESCRIPCIÓN Y MEDIDAS</Text>
+            <View style={styles.contenedorPrecio}>
+                <Text style={[styles.precio, { color: theme.primary }]}>${producto.precio}</Text>
+                
+                {/* ✨ PLACA DE CUOTAS PARA EL CLIENTE ✨ */}
+                {producto.enCuotas && (
+                    <Surface style={[styles.placaCuotas, { backgroundColor: theme.primary + '08', borderColor: theme.secondary }]} elevation={0}>
+                        <IconButton icon="credit-card-outline" iconColor={theme.secondary} size={20} style={{ margin: 0 }} />
+                        <View style={{ flex: 1 }}>
+                            <Text style={[styles.textoCuotas, { color: theme.text }]}>
+                                {producto.cuotasNumero} CUOTAS SIN INTERÉS DE
+                            </Text>
+                            <Text style={[styles.montoCuota, { color: theme.primary }]}>
+                                ${producto.cuotasValor}
+                            </Text>
+                        </View>
+                    </Surface>
+                )}
+            </View>
+
+            <Text style={[styles.tituloSeccion, { color: theme.primary, marginTop: 20 }]}>DESCRIPCIÓN Y MEDIDAS</Text>
             <Text style={[styles.descripcion, { color: theme.text }]}>
-              {producto.descripcion || "Diseño exclusivo de la colección ENZIRA Alta Costura. Calidad garantizada en cada detalle."}
+              {producto.descripcion || "Diseño exclusivo de la colección ENZIRA Alta Costura."}
             </Text>
 
             <Divider style={styles.divider} />
@@ -111,15 +113,9 @@ export const ProductDetailScreen = () => {
         onDismiss={() => setVisible(false)}
         duration={3000}
         style={{ backgroundColor: theme.primary }}
-        action={{
-          label: 'VER CARRITO',
-          textColor: theme.onPrimary,
-          onPress: () => navigation.navigate('Cart'),
-        }}
+        action={{ label: 'VER CARRITO', textColor: theme.onPrimary, onPress: () => navigation.navigate('Cart') }}
       >
-        <Text style={{ color: theme.onPrimary }}>
-            ¡{producto.nombre} ya está en tu carrito! ✨
-        </Text>
+        <Text style={{ color: theme.onPrimary }}>¡{producto.nombre} ya está en tu carrito! ✨</Text>
       </Snackbar>
     </View>
   );
@@ -127,53 +123,23 @@ export const ProductDetailScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  botonVolver: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 50 : 20,
-    left: 10,
-    zIndex: 10,
-  },
+  botonVolver: { position: 'absolute', top: Platform.OS === 'ios' ? 50 : 20, left: 10, zIndex: 10 },
   scrollContent: { paddingBottom: 40 },
   layoutMobile: { flexDirection: 'column' },
-  layoutWeb: {
-    flexDirection: 'row',
-    padding: 50,
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-  },
-  contenedorImagen: {
-    width: esWeb ? 500 : width,
-    height: esWeb ? 500 : width * 1.3,
-    backgroundColor: '#fff',
-    overflow: 'hidden',
-  },
-  imagen: { 
-    width: esWeb ? 500 : width, 
-    height: '100%', 
-    resizeMode: 'cover' 
-  },
-  indicadorContenedor: {
-    position: 'absolute',
-    bottom: 15,
-    right: 15,
-  },
-  indicadorTexto: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 15,
-    fontSize: 10,
-    fontWeight: 'bold',
-    overflow: 'hidden'
-  },
-  infoContainer: {
-    flex: 1,
-    padding: 30,
-    maxWidth: esWeb ? 500 : '100%',
-  },
+  layoutWeb: { flexDirection: 'row', padding: 50, justifyContent: 'center', alignItems: 'flex-start' },
+  contenedorImagen: { width: esWeb ? 500 : width, height: esWeb ? 500 : width * 1.3, backgroundColor: '#fff', overflow: 'hidden' },
+  imagen: { width: esWeb ? 500 : width, height: '100%', resizeMode: 'cover' },
+  indicadorContenedor: { position: 'absolute', bottom: 15, right: 15 },
+  indicadorTexto: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 15, fontSize: 10, fontWeight: 'bold', overflow: 'hidden' },
+  infoContainer: { flex: 1, padding: 30, maxWidth: esWeb ? 500 : '100%' },
   categoria: { fontSize: 12, letterSpacing: 2, fontWeight: 'bold', marginBottom: 10 },
   nombre: { fontSize: 28, fontWeight: 'bold', letterSpacing: 3 },
   lineaDecorativa: { width: 40, height: 2, marginVertical: 15 },
-  precio: { fontSize: 24, fontWeight: 'bold', marginBottom: 25 },
+  contenedorPrecio: { marginBottom: 20 },
+  precio: { fontSize: 32, fontWeight: 'bold', marginBottom: 5 },
+  placaCuotas: { flexDirection: 'row', alignItems: 'center', padding: 12, borderLeftWidth: 3, borderRadius: 4, marginTop: 10 },
+  textoCuotas: { fontSize: 10, fontWeight: 'bold', letterSpacing: 1 },
+  montoCuota: { fontSize: 20, fontWeight: 'bold' },
   tituloSeccion: { fontSize: 10, fontWeight: 'bold', letterSpacing: 1, marginBottom: 8 },
   descripcion: { fontSize: 14, lineHeight: 22, opacity: 0.8, marginBottom: 30 },
   divider: { marginBottom: 30, opacity: 0.1 },
