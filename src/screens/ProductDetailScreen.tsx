@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Image, ScrollView, Platform, Dimensions } from 'react-native';
-import { Text, Button, IconButton, Divider, Surface, Snackbar } from 'react-native-paper';
+import { View, StyleSheet, Image, ScrollView, Platform, Dimensions, Linking } from 'react-native';
+import { Text, Button, IconButton, Divider, Surface, Snackbar, Chip } from 'react-native-paper';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { useCart } from '../context/CartContext';
 import { useAppTheme } from '../context/ThemeContext';
@@ -17,6 +17,7 @@ export const ProductDetailScreen = () => {
 
   const [visible, setVisible] = useState(false);
 
+  // Lógica para el carrete de imágenes
   const listaImagenes = producto.imagenes && producto.imagenes.length > 0 
     ? producto.imagenes 
     : [producto.imagen];
@@ -25,6 +26,15 @@ export const ProductDetailScreen = () => {
     addToCart(producto);
     setVisible(true);
   };
+
+  // ✨ FUNCIÓN DE RECUPERACIÓN DE VENTA (WhatsApp)
+  const consultarDisponibilidad = () => {
+    const mensaje = `¡Hola Mariel! ✨ Vi la cartera *${producto.nombre.toUpperCase()}* en la App pero figura agotada. ¿Tenés fecha de reingreso o algún modelo similar disponible? 😍`;
+    const url = `https://wa.me/5493873001475?text=${encodeURIComponent(mensaje)}`;
+    Linking.openURL(url);
+  };
+
+  const tieneStock = producto.stock > 0;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -54,9 +64,25 @@ export const ProductDetailScreen = () => {
           </Surface>
 
           <View style={styles.infoContainer}>
-            <Text style={[styles.categoria, { color: theme.secondary }]}>
-                {producto.categoria.toUpperCase()}
-            </Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={[styles.categoria, { color: theme.secondary }]}>
+                    {producto.categoria.toUpperCase()}
+                </Text>
+                
+                {/* ✨ ETIQUETA DE STOCK DINÁMICA ✨ */}
+                {tieneStock ? (
+                    producto.stock <= 3 && (
+                        <Chip icon="alert-decagram" textStyle={{ fontSize: 10, fontWeight: 'bold', color: '#B00020' }} style={{ backgroundColor: '#FFF0F0' }}>
+                            ¡ÚLTIMAS {producto.stock}!
+                        </Chip>
+                    )
+                ) : (
+                    <Chip icon="close-circle" textStyle={{ fontSize: 10, fontWeight: 'bold', color: '#666' }} style={{ backgroundColor: '#F5F5F5' }}>
+                        AGOTADO
+                    </Chip>
+                )}
+            </View>
+
             <Text style={[styles.nombre, { color: theme.primary }]}>
                 {producto.nombre.toUpperCase()}
             </Text>
@@ -65,7 +91,6 @@ export const ProductDetailScreen = () => {
             <View style={styles.contenedorPrecio}>
                 <Text style={[styles.precio, { color: theme.primary }]}>${producto.precio}</Text>
                 
-                {/* ✨ PLACA DE CUOTAS PARA EL CLIENTE ✨ */}
                 {producto.enCuotas && (
                     <Surface style={[styles.placaCuotas, { backgroundColor: theme.primary + '08', borderColor: theme.secondary }]} elevation={0}>
                         <IconButton icon="credit-card-outline" iconColor={theme.secondary} size={20} style={{ margin: 0 }} />
@@ -88,16 +113,17 @@ export const ProductDetailScreen = () => {
 
             <Divider style={styles.divider} />
 
+            {/* ✨ BOTÓN INTELIGENTE (AGREGAR O CONSULTAR) ✨ */}
             <Button
               mode="contained"
-              onPress={manejarAgregarAlCarrito}
-              style={styles.botonAgregar}
-              buttonColor={theme.primary}
+              onPress={tieneStock ? manejarAgregarAlCarrito : consultarDisponibilidad}
+              style={[styles.botonAccion, !tieneStock && { backgroundColor: theme.secondary }]}
+              buttonColor={tieneStock ? theme.primary : theme.secondary}
               textColor={theme.onPrimary}
               labelStyle={styles.labelBoton}
-              icon="cart-plus"
+              icon={tieneStock ? "cart-plus" : "whatsapp"}
             >
-              AÑADIR AL CARRITO
+              {tieneStock ? 'AÑADIR AL CARRITO' : 'CONSULTAR REINGRESO'}
             </Button>
 
             <View style={styles.detallesEnvio}>
@@ -132,8 +158,8 @@ const styles = StyleSheet.create({
   indicadorContenedor: { position: 'absolute', bottom: 15, right: 15 },
   indicadorTexto: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 15, fontSize: 10, fontWeight: 'bold', overflow: 'hidden' },
   infoContainer: { flex: 1, padding: 30, maxWidth: esWeb ? 500 : '100%' },
-  categoria: { fontSize: 12, letterSpacing: 2, fontWeight: 'bold', marginBottom: 10 },
-  nombre: { fontSize: 28, fontWeight: 'bold', letterSpacing: 3 },
+  categoria: { fontSize: 12, letterSpacing: 2, fontWeight: 'bold' },
+  nombre: { fontSize: 28, fontWeight: 'bold', letterSpacing: 3, marginTop: 5 },
   lineaDecorativa: { width: 40, height: 2, marginVertical: 15 },
   contenedorPrecio: { marginBottom: 20 },
   precio: { fontSize: 32, fontWeight: 'bold', marginBottom: 5 },
@@ -143,8 +169,8 @@ const styles = StyleSheet.create({
   tituloSeccion: { fontSize: 10, fontWeight: 'bold', letterSpacing: 1, marginBottom: 8 },
   descripcion: { fontSize: 14, lineHeight: 22, opacity: 0.8, marginBottom: 30 },
   divider: { marginBottom: 30, opacity: 0.1 },
-  botonAgregar: { borderRadius: 0, paddingVertical: 8 },
-  labelBoton: { fontWeight: 'bold', letterSpacing: 2, fontSize: 16 },
+  botonAccion: { borderRadius: 0, paddingVertical: 8 },
+  labelBoton: { fontWeight: 'bold', letterSpacing: 2, fontSize: 15 },
   detallesEnvio: { marginTop: 30 },
   envioTexto: { fontSize: 12, opacity: 0.5, marginBottom: 5, fontStyle: 'italic' },
 });
