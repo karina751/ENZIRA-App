@@ -31,7 +31,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
 
 // Firebase y Tema
-import { collection, addDoc, doc, updateDoc, deleteDoc, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, deleteDoc, query, orderBy, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAppTheme } from '../context/ThemeContext'; 
 
@@ -53,12 +53,12 @@ export const AdminScreen = () => {
   const [avisoVisible, setAvisoVisible] = useState(false);
   const [avisoConfig, setAvisoConfig] = useState({ titulo: '', mensaje: '', esError: false, accion: () => {} });
 
-  // Formulario Principal
+  // Estados del Formulario Principal
   const [idEdicion, setIdEdicion] = useState<string | null>(null);
   const [nombre, setNombre] = useState('');
   const [precio, setPrecio] = useState('');
   const [stock, setStock] = useState(''); 
-  const [descripcion, setDescripcion] = useState(''); // Historia
+  const [descripcion, setDescripcion] = useState('');
   const [categoria, setCategoria] = useState('Carteras'); 
   const [categoriaPersonalizada, setCategoriaPersonalizada] = useState(''); 
   const [imagenes, setImagenes] = useState<string[]>([]);
@@ -67,12 +67,16 @@ export const AdminScreen = () => {
   const [cuotasNumero, setCuotasNumero] = useState('3'); 
   const [cuotasValor, setCuotasValor] = useState('');
 
-  // ✨ ESTADOS FICHA TÉCNICA ✨
+  // Estados Ficha Técnica
   const [alto, setAlto] = useState('');
   const [ancho, setAncho] = useState('');
   const [profundidad, setProfundidad] = useState('');
   const [asa, setAsa] = useState('');
   const [peso, setPeso] = useState('');
+
+  // ✨ ESTADOS PARA CONFIGURACIÓN DE PAGOS ✨
+  const [aliasConfig, setAliasConfig] = useState('');
+  const [titularConfig, setTitularConfig] = useState('');
 
   // --- 🔥 CARGA DE DATOS REAL TIME ---
   useEffect(() => {
@@ -89,21 +93,23 @@ export const AdminScreen = () => {
         setProductos(listaTemp);
     });
 
-    // 3. Pedidos (Con Debug para Kari)
+    // 3. Pedidos
     const qOrders = query(collection(db, 'pedidos'), orderBy('fecha', 'desc'));
-    const unsubOrders = onSnapshot(qOrders, 
-      (snapshot) => {
-        console.log("PEDIDOS ACTUALIZADOS:", snapshot.size);
-        const listaPedidos: any[] = [];
-        snapshot.forEach(doc => listaPedidos.push({ id: doc.id, ...doc.data() }));
-        setPedidos(listaPedidos);
-      },
-      (error) => {
-        console.error("ERROR FIRESTORE PEDIDOS:", error.message);
-      }
-    );
+    const unsubOrders = onSnapshot(qOrders, (snapshot) => {
+      const listaPedidos: any[] = [];
+      snapshot.forEach(doc => listaPedidos.push({ id: doc.id, ...doc.data() }));
+      setPedidos(listaPedidos);
+    });
 
-    return () => { unsubEstilo(); unsubProd(); unsubOrders(); };
+    // 4. ✨ CONFIGURACIÓN DE PAGOS ✨
+    const unsubPagos = onSnapshot(doc(db, 'configuracion', 'pagos'), (docSnap) => {
+      if (docSnap.exists()) {
+        setAliasConfig(docSnap.data().alias || '');
+        setTitularConfig(docSnap.data().titular || '');
+      }
+    });
+
+    return () => { unsubEstilo(); unsubProd(); unsubOrders(); unsubPagos(); };
   }, []);
 
   // --- 🛠️ FUNCIONES ---
@@ -166,7 +172,7 @@ export const AdminScreen = () => {
         enCuotas: enCuotas,
         cuotasNumero: parseInt(cuotasNumero) || 3,
         cuotasValor: parseFloat(cuotasValor) || 0,
-        medidas: { alto, ancho, profundidad, asa, peso } // ✨ FICHA TÉCNICA
+        medidas: { alto, ancho, profundidad, asa, peso }
       };
 
       if (idEdicion) {
@@ -178,7 +184,7 @@ export const AdminScreen = () => {
       }
     } catch (e) {
       setCargando(false);
-      mostrarAviso("❌ ERROR", "Falló la comunicación con el servidor.", undefined, true);
+      mostrarAviso("❌ ERROR", "Falló la subida.", undefined, true);
     }
   };
 
@@ -192,7 +198,6 @@ export const AdminScreen = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* --- ✨ HEADER DINÁMICO ✨ --- */}
       <Surface style={[styles.header, { backgroundColor: theme.background }]} elevation={1}>
         <IconButton icon="arrow-left" iconColor={theme.primary} onPress={() => navigation.goBack()} />
         <View style={styles.headerCentral}>
@@ -209,7 +214,7 @@ export const AdminScreen = () => {
           <Menu.Item leadingIcon="plus-circle-outline" onPress={() => cambiarVista('formulario')} title="Nuevo / Editar" />
           <Divider />
           <Menu.Item leadingIcon="bell-outline" onPress={() => cambiarVista('pedidos')} title="Pedidos" />
-          <Menu.Item leadingIcon="palette-outline" onPress={() => cambiarVista('config')} title="Estilo Estación" />
+          <Menu.Item leadingIcon="palette-outline" onPress={() => cambiarVista('config')} title="Configuración" />
         </Menu>
       </Surface>
 
@@ -277,24 +282,14 @@ export const AdminScreen = () => {
           {categoria === 'OTRA' && <TextInput label="Nueva categoría" value={categoriaPersonalizada} onChangeText={setCategoriaPersonalizada} mode="outlined" style={styles.input} />}
 
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <TextInput label="Precio Total" value={precio} onChangeText={setPrecio} keyboardType="numeric" mode="outlined" style={[styles.input, { width: '48%' }]} />
+            <TextInput label="Precio" value={precio} onChangeText={setPrecio} keyboardType="numeric" mode="outlined" style={[styles.input, { width: '48%' }]} />
             <TextInput label="Stock" value={stock} onChangeText={setStock} keyboardType="numeric" mode="outlined" style={[styles.input, { width: '48%' }]} />
           </View>
 
-          {/* ✨ 1. HISTORIA ✨ */}
           <Text style={[styles.labelForm, { color: theme.primary, marginTop: 10 }]}>HISTORIA / DETALLES DE DISEÑO</Text>
-          <TextInput 
-            placeholder="Relatá los detalles que hacen único a este diseño..." 
-            value={descripcion} 
-            onChangeText={setDescripcion} 
-            mode="outlined" 
-            multiline 
-            numberOfLines={4} 
-            style={[styles.input, { height: 100 }]} 
-          />
+          <TextInput placeholder="Relatá los detalles que hacen único a este diseño..." value={descripcion} onChangeText={setDescripcion} mode="outlined" multiline numberOfLines={4} style={[styles.input, { height: 100 }]} />
 
-          {/* ✨ 2. FICHA TÉCNICA ✨ */}
-          <Text style={[styles.labelForm, { color: theme.primary, marginTop: 10 }]}>FICHA TÉCNICA (SÓLO NÚMEROS)</Text>
+          <Text style={[styles.labelForm, { color: theme.primary, marginTop: 10 }]}>FICHA TÉCNICA (NÚMEROS EN CM / GR)</Text>
           <Surface style={styles.fichaCont} elevation={0}>
               <View style={styles.filaFicha}>
                   <TextInput label="Alto" value={alto} onChangeText={setAlto} keyboardType="numeric" mode="outlined" style={styles.inputFicha} />
@@ -302,8 +297,8 @@ export const AdminScreen = () => {
                   <TextInput label="Fuelle" value={profundidad} onChangeText={setProfundidad} keyboardType="numeric" mode="outlined" style={styles.inputFicha} />
               </View>
               <View style={styles.filaFicha}>
-                  <TextInput label="Asa (caída)" value={asa} onChangeText={setAsa} keyboardType="numeric" mode="outlined" style={{ flex: 1, marginRight: 10, backgroundColor: '#fff' }} />
-                  <TextInput label="Peso (gr)" value={peso} onChangeText={setPeso} keyboardType="numeric" mode="outlined" style={{ flex: 1, backgroundColor: '#fff' }} />
+                  <TextInput label="Asa" value={asa} onChangeText={setAsa} keyboardType="numeric" mode="outlined" style={{ flex: 1, marginRight: 10, backgroundColor: '#fff' }} />
+                  <TextInput label="Peso" value={peso} onChangeText={setPeso} keyboardType="numeric" mode="outlined" style={{ flex: 1, backgroundColor: '#fff' }} />
               </View>
           </Surface>
           
@@ -339,10 +334,10 @@ export const AdminScreen = () => {
         )} />
       )}
 
-      {/* 4. VISTA CONFIG */}
+      {/* 4. VISTA CONFIG ✨ */}
       {vista === 'config' && (
         <ScrollView contentContainerStyle={styles.formContainer}>
-            <Card style={{ borderLeftWidth: 4, borderLeftColor: theme.secondary, backgroundColor: '#fff' }}>
+            <Card style={{ borderLeftWidth: 4, borderLeftColor: theme.secondary, backgroundColor: '#fff', borderRadius: 0 }}>
                 <Card.Title title="ESTÉTICA TEMPORAL" />
                 <Card.Content>
                     <SegmentedButtons
@@ -350,6 +345,37 @@ export const AdminScreen = () => {
                         onValueChange={async (v: string) => { await updateDoc(doc(db, 'configuracion', 'apariencia'), { estacionActual: v }); }}
                         buttons={[{ value: 'otoño', label: '🍂' }, { value: 'invierno', label: '❄️' }, { value: 'primavera', label: '🌸' }, { value: 'verano', label: '☀️' }]}
                     />
+                </Card.Content>
+            </Card>
+
+            <Card style={{ marginTop: 20, borderLeftWidth: 4, borderLeftColor: '#CFAF68', backgroundColor: '#fff', borderRadius: 0 }}>
+                <Card.Title title="DATOS DE COBRO" subtitle="Se verán en el carrito del cliente" />
+                <Card.Content>
+                    <TextInput 
+                      label="Alias de la cuenta" 
+                      value={aliasConfig} 
+                      onChangeText={setAliasConfig} 
+                      mode="outlined" 
+                      style={{ marginBottom: 10 }} 
+                    />
+                    <TextInput 
+                      label="Titular de la cuenta" 
+                      value={titularConfig} 
+                      onChangeText={setTitularConfig} 
+                      mode="outlined" 
+                    />
+                    <Button 
+                      mode="contained" 
+                      style={{ marginTop: 15, borderRadius: 0 }} 
+                      buttonColor={theme.primary}
+                      onPress={async () => {
+                        // Usamos setDoc con merge:true para crear o actualizar
+                        await setDoc(doc(db, 'configuracion', 'pagos'), { alias: aliasConfig, titular: titularConfig }, { merge: true });
+                        mostrarAviso("✨ ACTUALIZADO", "Los datos de pago han sido guardados.");
+                      }}
+                    >
+                      GUARDAR DATOS
+                    </Button>
                 </Card.Content>
             </Card>
         </ScrollView>
@@ -360,8 +386,7 @@ export const AdminScreen = () => {
           <Dialog.Title style={{ color: theme.primary }}>{avisoConfig.titulo}</Dialog.Title>
           <Dialog.Content><Text>{avisoConfig.mensaje}</Text></Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setAvisoVisible(false)}>CERRAR</Button>
-            <Button mode="contained" onPress={avisoConfig.accion} buttonColor={theme.primary}>ACEPTAR</Button>
+            <Button onPress={() => setAvisoVisible(false)}>ACEPTAR</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>

@@ -1,18 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, FlatList, Image, Linking, Alert } from 'react-native';
 import { Text, Button, IconButton, Surface, Portal, Dialog, SegmentedButtons } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import { useCart } from '../context/CartContext';
 import { auth, db } from '../services/firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, onSnapshot } from 'firebase/firestore';
 
 export const CartScreen = () => {
   const navigation = useNavigation<any>();
   const { cart, removeFromCart, updateQuantity, totalAmount, clearCart } = useCart();
+  
   const [avisoVisible, setAvisoVisible] = useState(false);
   const [metodoPago, setMetodoPago] = useState('transferencia');
+  
+  // ✨ DATOS DINÁMICOS DE FIREBASE ✨
+  const [datosBancarios, setDatosBancarios] = useState({ alias: 'Cargando...', titular: '' });
 
-  const datosBancarios = { alias: "ENZIRA.BAGS", titular: "Mariel Enzira" };
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'configuracion', 'pagos'), (docSnap) => {
+      if (docSnap.exists()) {
+        setDatosBancarios({
+          alias: docSnap.data().alias,
+          titular: docSnap.data().titular
+        });
+      }
+    });
+    return () => unsub();
+  }, []);
 
   const calcularCuotaTotal = () => {
     let acumulado = 0;
@@ -34,17 +48,24 @@ export const CartScreen = () => {
     if (!usuarioActual) { Alert.alert("ENZIRA", "Iniciá sesión."); navigation.navigate('Login'); return; }
 
     let mensaje = `✨ *NUEVO PEDIDO - ENZIRA* ✨\n\n`;
-    mensaje += `*Cliente:* ${usuarioActual.email}\n`;
-    mensaje += `*Método:* ${metodoPago.toUpperCase()}\n`;
+    mensaje += `👤 *Cliente:* ${usuarioActual.email}\n`;
+    mensaje += `💳 *Método de Pago:* ${metodoPago.toUpperCase()}\n`;
     mensaje += `----------------------------------\n`;
     cart.forEach((item: any) => {
-      mensaje += `🛍️ *${item.nombre.toUpperCase()}* x${item.quantity}\n`;
+      mensaje += `🛍️ *${item.nombre.toUpperCase()}* x${item.quantity} ($${item.precio.toFixed(0)})\n`;
     });
     mensaje += `\n💰 *TOTAL: $${totalAmount.toFixed(0)}*`;
+    if(metodoPago === 'transferencia') mensaje += `\n🏦 *Alias:* ${datosBancarios.alias}`;
 
     try {
       await addDoc(collection(db, 'pedidos'), {
-        clienteEmail: usuarioActual.email, clienteUid: usuarioActual.uid, items: cart, total: totalAmount, metodoPago, estado: 'Pendiente', fecha: new Date()
+        clienteEmail: usuarioActual.email,
+        clienteUid: usuarioActual.uid,
+        items: cart,
+        total: totalAmount,
+        metodoPago: metodoPago,
+        estado: 'Pendiente',
+        fecha: new Date()
       });
       Linking.openURL(`https://wa.me/5493873001475?text=${encodeURIComponent(mensaje)}`);
       setAvisoVisible(true);
@@ -58,13 +79,13 @@ export const CartScreen = () => {
       <FlatList
         data={cart}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingBottom: 250 }}
+        contentContainerStyle={{ padding: 15, paddingBottom: 260 }}
         renderItem={({ item }: { item: any }) => (
-          <Surface style={styles.itemTarjeta} elevation={0}>
+          <Surface style={styles.itemTarjeta} elevation={1}>
             <Image source={{ uri: item.imagenes ? item.imagenes[0] : item.imagen }} style={styles.imagenItem} />
             <View style={styles.infoItem}>
               <Text style={styles.nombreItem}>{item.nombre.toUpperCase()}</Text>
-              <Text style={styles.precioUnitario}>${item.precio}</Text>
+              <Text style={styles.precioUnitario}>${item.precio.toFixed(0)}</Text>
               <View style={styles.controlesCantidad}>
                 <IconButton icon="minus-circle-outline" size={18} onPress={() => updateQuantity(item.id, item.quantity - 1)} disabled={item.quantity <= 1} />
                 <Text style={styles.cantidadTexto}>{item.quantity}</Text>
@@ -79,31 +100,37 @@ export const CartScreen = () => {
       {cart.length > 0 && (
         <Surface style={styles.footer} elevation={5}>
           <View style={styles.seccionPago}>
-            <Text style={styles.tituloPago}>FORMA DE PAGO</Text>
+            <Text style={styles.tituloPago}>¿CÓMO DESEÁS ABONAR?</Text>
             <SegmentedButtons
                 value={metodoPago}
                 onValueChange={(v: string) => setMetodoPago(v)}
                 buttons={[{ value: 'transferencia', label: 'Transf.' }, { value: 'tarjeta', label: 'Tarjeta' }, { value: 'efectivo', label: 'Efectivo' }]}
                 style={{ marginBottom: 10 }}
+                theme={{ colors: { secondaryContainer: '#002147', onSecondaryContainer: '#fff' } }}
             />
-            {metodoPago === 'transferencia' && <Text style={{fontSize: 11}}>Alias: **{datosBancarios.alias}**</Text>}
+            {metodoPago === 'transferencia' && (
+                <View style={styles.infoPagoBox}>
+                    <Text style={{fontSize: 11}}>Alias: **{datosBancarios.alias}**</Text>
+                    <Text style={{fontSize: 11}}>Titular: {datosBancarios.titular}</Text>
+                </View>
+            )}
           </View>
 
           <View style={styles.filaFooter}>
             <View>
-              <Text style={styles.labelTotal}>TOTAL</Text>
+              <Text style={styles.labelTotal}>TOTAL FINAL</Text>
               <Text style={styles.montoTotal}>${totalAmount.toFixed(0)}</Text>
               {acumulado > 0 && <Text style={styles.labelCuotas}>{cuotasSugeridas} cuotas de ${acumulado.toFixed(0)}</Text>}
             </View>
-            <Button mode="contained" onPress={manejarFinalizarCompra} buttonColor="#002147" icon="whatsapp">SOLICITAR</Button>
+            <Button mode="contained" onPress={manejarFinalizarCompra} buttonColor="#002147" icon="whatsapp" style={{borderRadius: 0}}>SOLICITAR</Button>
           </View>
         </Surface>
       )}
 
       <Portal>
         <Dialog visible={avisoVisible} onDismiss={finalFlujo} style={{ borderRadius: 0, backgroundColor: '#fff' }}>
-          <Dialog.Title>¡PEDIDO ENVIADO! ✨</Dialog.Title>
-          <Dialog.Content><Text>Mariel recibió tu mensaje. Coordiná el envío con ella.</Text></Dialog.Content>
+          <Dialog.Title style={{ color: '#002147' }}>¡PEDIDO ENVIADO! ✨</Dialog.Title>
+          <Dialog.Content><Text>Mariel recibió tu pedido. Coordiná el pago y envío por WhatsApp.</Text></Dialog.Content>
           <Dialog.Actions><Button mode="contained" buttonColor="#002147" onPress={finalFlujo} textColor="#fff">ACEPTAR</Button></Dialog.Actions>
         </Dialog>
       </Portal>
@@ -126,5 +153,6 @@ const styles = StyleSheet.create({
   montoTotal: { fontSize: 24, fontWeight: 'bold', color: '#002147' },
   labelCuotas: { fontSize: 11, color: '#25D366', fontWeight: 'bold' },
   seccionPago: { marginBottom: 15 },
-  tituloPago: { fontSize: 10, fontWeight: 'bold', letterSpacing: 1, marginBottom: 10, opacity: 0.5 }
+  tituloPago: { fontSize: 10, fontWeight: 'bold', letterSpacing: 1, marginBottom: 10, opacity: 0.5 },
+  infoPagoBox: { padding: 10, backgroundColor: 'rgba(0,0,0,0.03)', borderLeftWidth: 3, borderLeftColor: '#CFAF68' }
 });
