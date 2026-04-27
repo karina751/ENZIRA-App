@@ -1,6 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Image, TouchableOpacity, Platform, FlatList, Dimensions } from 'react-native';
-import { Text, TextInput, Button, IconButton, Divider, List, Badge, Card, Surface, Portal, Dialog, Chip, Switch, Menu, SegmentedButtons } from 'react-native-paper';
+import { 
+  View, 
+  StyleSheet, 
+  ScrollView, 
+  Image, 
+  ActivityIndicator, 
+  TouchableOpacity, 
+  Platform, 
+  FlatList, 
+  Dimensions 
+} from 'react-native';
+import { 
+  Text, 
+  TextInput, 
+  Button, 
+  IconButton, 
+  Divider, 
+  List, 
+  Badge, 
+  Card, 
+  Surface, 
+  Portal,
+  Dialog,
+  Chip,
+  Switch,
+  Menu,
+  SegmentedButtons
+} from 'react-native-paper';
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
 
@@ -15,7 +41,7 @@ export const AdminScreen = () => {
   const navigation = useNavigation<any>();
   const { theme } = useAppTheme(); 
 
-  // Estados de Control
+  // --- 🛠️ ESTADOS DE CONTROL ---
   const [vista, setVista] = useState('lista'); 
   const [menuVisible, setMenuVisible] = useState(false);
   const [productos, setProductos] = useState<any[]>([]);
@@ -27,12 +53,12 @@ export const AdminScreen = () => {
   const [avisoVisible, setAvisoVisible] = useState(false);
   const [avisoConfig, setAvisoConfig] = useState({ titulo: '', mensaje: '', esError: false, accion: () => {} });
 
-  // Estados del Formulario
+  // Formulario Principal
   const [idEdicion, setIdEdicion] = useState<string | null>(null);
   const [nombre, setNombre] = useState('');
   const [precio, setPrecio] = useState('');
   const [stock, setStock] = useState(''); 
-  const [descripcion, setDescripcion] = useState(''); // ✨ HISTORIA DEL PRODUCTO
+  const [descripcion, setDescripcion] = useState(''); // Historia
   const [categoria, setCategoria] = useState('Carteras'); 
   const [categoriaPersonalizada, setCategoriaPersonalizada] = useState(''); 
   const [imagenes, setImagenes] = useState<string[]>([]);
@@ -41,33 +67,48 @@ export const AdminScreen = () => {
   const [cuotasNumero, setCuotasNumero] = useState('3'); 
   const [cuotasValor, setCuotasValor] = useState('');
 
-  // ✨ ESTADOS FICHA TÉCNICA (Llenado Rápido)
+  // ✨ ESTADOS FICHA TÉCNICA ✨
   const [alto, setAlto] = useState('');
   const [ancho, setAncho] = useState('');
   const [profundidad, setProfundidad] = useState('');
   const [asa, setAsa] = useState('');
   const [peso, setPeso] = useState('');
 
+  // --- 🔥 CARGA DE DATOS REAL TIME ---
   useEffect(() => {
+    // 1. Estilo
     const unsubEstilo = onSnapshot(doc(db, 'configuracion', 'apariencia'), (docSnap) => {
       if (docSnap.exists()) setEstacionActual(docSnap.data().estacionActual);
     });
+
+    // 2. Productos
     const qProd = query(collection(db, 'productos'), orderBy('fechaCreacion', 'desc'));
     const unsubProd = onSnapshot(qProd, (snap) => {
         const listaTemp: any[] = [];
         snap.forEach((doc) => listaTemp.push({ id: doc.id, ...doc.data() }));
         setProductos(listaTemp);
     });
+
+    // 3. Pedidos (Con Debug para Kari)
     const qOrders = query(collection(db, 'pedidos'), orderBy('fecha', 'desc'));
-    const unsubOrders = onSnapshot(qOrders, (snapshot) => {
-      const listaPedidos: any[] = [];
-      snapshot.forEach(doc => listaPedidos.push({ id: doc.id, ...doc.data() }));
-      setPedidos(listaPedidos);
-    });
+    const unsubOrders = onSnapshot(qOrders, 
+      (snapshot) => {
+        console.log("PEDIDOS ACTUALIZADOS:", snapshot.size);
+        const listaPedidos: any[] = [];
+        snapshot.forEach(doc => listaPedidos.push({ id: doc.id, ...doc.data() }));
+        setPedidos(listaPedidos);
+      },
+      (error) => {
+        console.error("ERROR FIRESTORE PEDIDOS:", error.message);
+      }
+    );
+
     return () => { unsubEstilo(); unsubProd(); unsubOrders(); };
   }, []);
 
+  // --- 🛠️ FUNCIONES ---
   const cambiarVista = (nuevaVista: string) => { setVista(nuevaVista); setMenuVisible(false); };
+  
   const mostrarAviso = (titulo: string, mensaje: string, accion?: () => void, error = false) => {
     setAvisoConfig({ titulo, mensaje, esError: error, accion: accion ? accion : () => setAvisoVisible(false) });
     setAvisoVisible(true);
@@ -89,7 +130,7 @@ export const AdminScreen = () => {
   const ejecutarGuardado = async () => {
     const categoriaFinal = (categoria === 'OTRA') ? categoriaPersonalizada.trim() : categoria;
     if (!nombre || !precio || imagenes.length === 0 || !categoriaFinal) {
-      mostrarAviso("⚠️ ATENCIÓN", "Faltan datos obligatorios.", undefined, true);
+      mostrarAviso("⚠️ ATENCIÓN", "Completá los campos obligatorios.", undefined, true);
       return;
     }
     setCargando(true);
@@ -119,7 +160,7 @@ export const AdminScreen = () => {
         nombre: nombre.trim(), 
         precio: parseFloat(precio) || 0, 
         stock: parseInt(stock) || 0, 
-        descripcion: descripcion.trim(), // HISTORIA
+        descripcion: descripcion.trim(),
         categoria: categoriaFinal,
         imagenes: urlsFinales,
         enCuotas: enCuotas,
@@ -130,14 +171,14 @@ export const AdminScreen = () => {
 
       if (idEdicion) {
         await updateDoc(doc(db, 'productos', idEdicion), payload);
-        mostrarAviso("✨ ÉXITO", "Tienda actualizada.", () => limpiarYSalir());
+        mostrarAviso("✨ ÉXITO", "Artículo actualizado.", () => limpiarYSalir());
       } else {
         await addDoc(collection(db, 'productos'), { ...payload, fechaCreacion: new Date().toISOString() });
-        mostrarAviso("✨ ÉXITO", "Producto publicado.", () => limpiarYSalir());
+        mostrarAviso("✨ ÉXITO", "Artículo publicado.", () => limpiarYSalir());
       }
     } catch (e) {
       setCargando(false);
-      mostrarAviso("❌ ERROR", "Falló la subida.", undefined, true);
+      mostrarAviso("❌ ERROR", "Falló la comunicación con el servidor.", undefined, true);
     }
   };
 
@@ -151,16 +192,16 @@ export const AdminScreen = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
+      {/* --- ✨ HEADER DINÁMICO ✨ --- */}
       <Surface style={[styles.header, { backgroundColor: theme.background }]} elevation={1}>
         <IconButton icon="arrow-left" iconColor={theme.primary} onPress={() => navigation.goBack()} />
         <View style={styles.headerCentral}>
             <Text style={[styles.tituloHeader, { color: theme.primary }]}>GESTIÓN DIRECTIVA</Text>
             <Text style={styles.subtituloHeader}>{vista === 'lista' ? 'STOCK' : vista.toUpperCase()}</Text>
         </View>
-        
-        <Menu
-          visible={menuVisible}
-          onDismiss={() => setMenuVisible(false)}
+        <Menu 
+          visible={menuVisible} 
+          onDismiss={() => setMenuVisible(false)} 
           anchor={<IconButton icon="menu" iconColor={theme.primary} onPress={() => setMenuVisible(true)} />}
           contentStyle={{ backgroundColor: '#fff' }}
         >
@@ -172,6 +213,7 @@ export const AdminScreen = () => {
         </Menu>
       </Surface>
 
+      {/* 1. VISTA LISTA */}
       {vista === 'lista' && (
         <FlatList data={productos} keyExtractor={(item) => item.id} contentContainerStyle={{ padding: 15 }} renderItem={({ item }) => (
             <Surface style={styles.cardItem} elevation={1}>
@@ -198,7 +240,7 @@ export const AdminScreen = () => {
                         setVista('formulario');
                     }} />
                     <IconButton icon="trash-can-outline" iconColor="#B00020" onPress={() => {
-                        mostrarAviso("BORRAR", "¿Eliminar este producto?", async () => {
+                        mostrarAviso("BORRAR", "¿Confirmás eliminar este artículo?", async () => {
                             await deleteDoc(doc(db, 'productos', item.id));
                             setAvisoVisible(false);
                         });
@@ -210,6 +252,7 @@ export const AdminScreen = () => {
         )} />
       )}
 
+      {/* 2. VISTA FORMULARIO */}
       {vista === 'formulario' && (
         <ScrollView contentContainerStyle={styles.formContainer} keyboardShouldPersistTaps="handled">
           <Text style={[styles.labelForm, { color: theme.primary }]}>FOTOS (TOCÁ PORTADA ⭐)</Text>
@@ -226,26 +269,32 @@ export const AdminScreen = () => {
           
           <TextInput label="Nombre del Producto" value={nombre} onChangeText={setNombre} mode="outlined" style={styles.input} />
           
-          <Text style={[styles.labelForm, { color: theme.primary, marginTop: 10 }]}>CATEGORÍA</Text>
-          <SegmentedButtons
-            value={categoria}
-            onValueChange={(val: string) => { setCategoria(val); if (val !== 'OTRA') setCategoriaPersonalizada(''); }}
-            buttons={[{ value: 'Carteras', label: 'Cart' }, { value: 'Mochilas', label: 'Moc' }, { value: 'Billeteras', label: 'Bill' }, { value: 'OTRA', label: 'OTRA' }]}
-            style={{ marginBottom: 15 }}
-          />
+          <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 15 }}>
+            {['Carteras', 'Mochilas', 'Billeteras', 'OTRA'].map((cat) => (
+                <Button key={cat} mode={categoria === cat ? "contained" : "outlined"} onPress={() => { setCategoria(cat); if (cat !== 'OTRA') setCategoriaPersonalizada(''); }} style={{ flex: 1, marginHorizontal: 2, borderRadius: 0 }} labelStyle={{ fontSize: 9 }} buttonColor={categoria === cat ? theme.primary : 'transparent'} textColor={categoria === cat ? theme.background : theme.primary}>{cat}</Button>
+            ))}
+          </View>
           {categoria === 'OTRA' && <TextInput label="Nueva categoría" value={categoriaPersonalizada} onChangeText={setCategoriaPersonalizada} mode="outlined" style={styles.input} />}
 
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <TextInput label="Precio" value={precio} onChangeText={setPrecio} keyboardType="numeric" mode="outlined" style={[styles.input, { width: '48%' }]} />
+            <TextInput label="Precio Total" value={precio} onChangeText={setPrecio} keyboardType="numeric" mode="outlined" style={[styles.input, { width: '48%' }]} />
             <TextInput label="Stock" value={stock} onChangeText={setStock} keyboardType="numeric" mode="outlined" style={[styles.input, { width: '48%' }]} />
           </View>
 
-          {/* ✨ HISTORIA ✨ */}
-          <Text style={[styles.labelForm, { color: theme.primary, marginTop: 10 }]}>HISTORIA / DESCRIPCIÓN COMERCIAL</Text>
-          <TextInput placeholder="Ej: Hermoso diseño artesanal..." value={descripcion} onChangeText={setDescripcion} mode="outlined" multiline numberOfLines={3} style={styles.input} />
+          {/* ✨ 1. HISTORIA ✨ */}
+          <Text style={[styles.labelForm, { color: theme.primary, marginTop: 10 }]}>HISTORIA / DETALLES DE DISEÑO</Text>
+          <TextInput 
+            placeholder="Relatá los detalles que hacen único a este diseño..." 
+            value={descripcion} 
+            onChangeText={setDescripcion} 
+            mode="outlined" 
+            multiline 
+            numberOfLines={4} 
+            style={[styles.input, { height: 100 }]} 
+          />
 
-          {/* ✨ FICHA TÉCNICA ✨ */}
-          <Text style={[styles.labelForm, { color: theme.primary, marginTop: 10 }]}>FICHA TÉCNICA (Medidas en cm / gr)</Text>
+          {/* ✨ 2. FICHA TÉCNICA ✨ */}
+          <Text style={[styles.labelForm, { color: theme.primary, marginTop: 10 }]}>FICHA TÉCNICA (SÓLO NÚMEROS)</Text>
           <Surface style={styles.fichaCont} elevation={0}>
               <View style={styles.filaFicha}>
                   <TextInput label="Alto" value={alto} onChangeText={setAlto} keyboardType="numeric" mode="outlined" style={styles.inputFicha} />
@@ -253,8 +302,8 @@ export const AdminScreen = () => {
                   <TextInput label="Fuelle" value={profundidad} onChangeText={setProfundidad} keyboardType="numeric" mode="outlined" style={styles.inputFicha} />
               </View>
               <View style={styles.filaFicha}>
-                  <TextInput label="Asa" value={asa} onChangeText={setAsa} keyboardType="numeric" mode="outlined" style={{ flex: 1, marginRight: 10, backgroundColor: '#fff' }} />
-                  <TextInput label="Peso" value={peso} onChangeText={setPeso} keyboardType="numeric" mode="outlined" style={{ flex: 1, backgroundColor: '#fff' }} />
+                  <TextInput label="Asa (caída)" value={asa} onChangeText={setAsa} keyboardType="numeric" mode="outlined" style={{ flex: 1, marginRight: 10, backgroundColor: '#fff' }} />
+                  <TextInput label="Peso (gr)" value={peso} onChangeText={setPeso} keyboardType="numeric" mode="outlined" style={{ flex: 1, backgroundColor: '#fff' }} />
               </View>
           </Surface>
           
@@ -264,7 +313,7 @@ export const AdminScreen = () => {
           </Surface>
           {enCuotas && (
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 }}>
-               <TextInput label="Cuotas" value={cuotasNumero} onChangeText={setCuotasNumero} keyboardType="numeric" mode="outlined" style={{ width: '30%' }} />
+               <TextInput label="N° Cuotas" value={cuotasNumero} onChangeText={setCuotasNumero} keyboardType="numeric" mode="outlined" style={{ width: '30%' }} />
                <TextInput label="Valor cuota" value={cuotasValor} onChangeText={setCuotasValor} keyboardType="numeric" mode="outlined" style={{ width: '65%' }} left={<TextInput.Affix text="$" />} />
             </View>
           )}
@@ -274,7 +323,23 @@ export const AdminScreen = () => {
         </ScrollView>
       )}
 
-      {/* Otras vistas (Pedidos y Config) */}
+      {/* 3. VISTA PEDIDOS */}
+      {vista === 'pedidos' && (
+        <FlatList data={pedidos} keyExtractor={(item) => item.id} contentContainerStyle={{ padding: 15 }} renderItem={({ item }) => (
+            <Card style={[styles.orderCard, { borderLeftColor: item.estado === 'Pendiente' ? theme.primary : '#25D366' }]}>
+              <Card.Content>
+                <View style={styles.orderHeader}><Text style={[styles.orderEmail, { color: theme.primary }]}>{item.clienteEmail}</Text><Chip style={{ backgroundColor: item.estado === 'Pendiente' ? theme.primary : '#25D366' }}><Text style={{ fontSize: 10, color: '#fff', fontWeight: 'bold' }}>{item.estado.toUpperCase()}</Text></Chip></View>
+                {item.items?.map((prod: any, idx: number) => (<Text key={idx} style={{ fontSize: 13 }}>• {prod.nombre} (x{prod.quantity || prod.cantidad})</Text>))}
+                <Text style={[styles.orderTotal, { color: theme.primary }]}>TOTAL: ${item.total}</Text>
+              </Card.Content>
+              <Card.Actions>
+                {item.estado === 'Pendiente' && <Button mode="contained" buttonColor={theme.primary} onPress={() => { updateDoc(doc(db, 'pedidos', item.id), { estado: 'Entregado' }); }}>ENTREGADO</Button>}
+              </Card.Actions>
+            </Card>
+        )} />
+      )}
+
+      {/* 4. VISTA CONFIG */}
       {vista === 'config' && (
         <ScrollView contentContainerStyle={styles.formContainer}>
             <Card style={{ borderLeftWidth: 4, borderLeftColor: theme.secondary, backgroundColor: '#fff' }}>
@@ -324,7 +389,7 @@ const styles = StyleSheet.create({
   miniImgContainer: { position: 'relative' },
   miniImg: { width: 50, height: 65, marginLeft: 10 },
   badgeStock: { position: 'absolute', top: -5, right: -5, fontWeight: 'bold' },
-  orderCard: { marginBottom: 15, borderLeftWidth: 4, borderRadius: 0 },
+  orderCard: { marginBottom: 15, borderLeftWidth: 4, borderRadius: 0, backgroundColor: '#fff' },
   orderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 },
   orderEmail: { fontSize: 14, fontWeight: 'bold' },
   orderTotal: { fontSize: 18, fontWeight: 'bold', textAlign: 'right', marginTop: 10 },
