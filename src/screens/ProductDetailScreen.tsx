@@ -39,7 +39,6 @@ export const ProductDetailScreen = () => {
             <Text style={[styles.nombre, { color: theme.primary }]}>{producto.nombre.toUpperCase()}</Text>
             <View style={[styles.lineaDecorativa, { backgroundColor: theme.secondary }]} />
             
-            {/* ✨ CONTENEDOR PRECIO (Solución Error Imagen 7) ✨ */}
             <View style={styles.contenedorPrecio}>
                 <Text style={[styles.precio, { color: theme.primary }]}>${producto.precio}</Text>
                 {producto.enCuotas && (
@@ -51,9 +50,8 @@ export const ProductDetailScreen = () => {
             </View>
 
             <Text style={[styles.tituloSeccion, { color: theme.primary, marginTop: 20 }]}>SOBRE ESTA PIEZA</Text>
-            <Text style={[styles.descripcion, { color: theme.text }]}>{producto.descripcion || "Diseño artesanal Enzira Alta Costura."}</Text>
+            <Text style={[styles.descripcion, { color: theme.text }]}>{producto.descripcion || "Un diseño artesanal pensado para acompañarte en cada momento."}</Text>
 
-            {/* ESPECIFICACIONES TÉCNICAS */}
             {producto.medidas && (
                 <>
                     <Text style={[styles.tituloSeccion, { color: theme.primary, marginTop: 15 }]}>ESPECIFICACIONES TÉCNICAS</Text>
@@ -68,7 +66,7 @@ export const ProductDetailScreen = () => {
             )}
 
             <Divider style={styles.divider} />
-            <Button mode="contained" onPress={tieneStock ? () => { addToCart(producto); setVisible(true); } : () => Linking.openURL(`https://wa.me/5493873001475?text=Consulta: ${producto.nombre}`)} buttonColor={tieneStock ? theme.primary : theme.secondary} textColor="#fff" icon={tieneStock ? "cart-plus" : "whatsapp"}>SOLICITAR</Button>
+            <Button mode="contained" onPress={tieneStock ? () => { addToCart(producto); setVisible(true); } : () => Linking.openURL(`https://wa.me/5493873001475?text=Consulta: ${producto.nombre}`)} buttonColor={tieneStock ? theme.primary : theme.secondary} textColor="#fff" icon={tieneStock ? "cart-plus" : "whatsapp"}>AÑADIR AL CARRITO</Button>
           </View>
         </View>
       </ScrollView>
@@ -91,7 +89,7 @@ const styles = StyleSheet.create({
   categoria: { fontSize: 12, letterSpacing: 2, fontWeight: 'bold' },
   nombre: { fontSize: 26, fontWeight: 'bold', marginTop: 5 },
   lineaDecorativa: { width: 40, height: 2, marginVertical: 15 },
-  contenedorPrecio: { marginBottom: 15 }, // ✨ ARREGLADO
+  contenedorPrecio: { marginBottom: 15 },
   precio: { fontSize: 32, fontWeight: 'bold' },
   placaCuotas: { flexDirection: 'row', alignItems: 'center', padding: 10, marginTop: 10 },
   textoCuotas: { fontSize: 9, fontWeight: 'bold' },

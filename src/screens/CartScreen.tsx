@@ -52,7 +52,7 @@ export const CartScreen = () => {
       });
       Linking.openURL(`https://wa.me/5493873001475?text=${encodeURIComponent(mensaje)}`);
       setAvisoVisible(true);
-    } catch (e) { Alert.alert("ERROR", "No se pudo registrar."); }
+    } catch (e) { Alert.alert("ERROR", "Falló el registro."); }
   };
 
   const finalFlujo = () => { setAvisoVisible(false); clearCart(); navigation.navigate('Home'); };
@@ -113,7 +113,7 @@ export const CartScreen = () => {
       <Portal>
         <Dialog visible={avisoVisible} onDismiss={finalFlujo} style={{ borderRadius: 0, backgroundColor: '#fff' }}>
           <Dialog.Title>¡PEDIDO ENVIADO! ✨</Dialog.Title>
-          <Dialog.Content><Text>Mariel recibió tu pedido. Coordiná el pago y envío por WhatsApp.</Text></Dialog.Content>
+          <Dialog.Content><Text>Mariel recibió tu mensaje. Coordiná el envío con ella.</Text></Dialog.Content>
           <Dialog.Actions><Button mode="contained" buttonColor="#002147" onPress={finalFlujo} textColor="#fff">ACEPTAR</Button></Dialog.Actions>
         </Dialog>
       </Portal>
@@ -136,6 +136,6 @@ const styles = StyleSheet.create({
   montoTotal: { fontSize: 24, fontWeight: 'bold', color: '#002147' },
   labelCuotas: { fontSize: 11, color: '#25D366', fontWeight: 'bold' },
   seccionPago: { marginBottom: 15 },
-  tituloPago: { fontSize: 10, fontWeight: 'bold', letterSpacing: 1, marginBottom: 10, opacity: 0.5 },
+  tituloPago: { fontSize: 10, fontWeight: 'bold', opacity: 0.5, marginBottom: 10 },
   infoPagoBox: { padding: 10, backgroundColor: 'rgba(0,0,0,0.03)', borderLeftWidth: 3, borderLeftColor: '#CFAF68' }
 });
