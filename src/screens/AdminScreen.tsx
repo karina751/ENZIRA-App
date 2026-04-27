@@ -46,7 +46,7 @@ export const AdminScreen = () => {
   const [imagenes, setImagenes] = useState<string[]>([]);
   const [fotoPrincipal, setFotoPrincipal] = useState(0); 
   
-  // ✨ ESTADOS DE CUOTAS ✨
+  // ✨ ESTADOS DE CUOTAS (Asegurados) ✨
   const [enCuotas, setEnCuotas] = useState(false);
   const [cuotasNumero, setCuotasNumero] = useState('3'); 
   const [cuotasValor, setCuotasValor] = useState('');
@@ -118,7 +118,7 @@ export const AdminScreen = () => {
   };
 
   const borrarPedido = (id: string) => {
-    mostrarAviso("ELIMINAR PEDIDO", "¿Borrar este registro del historial?", async () => {
+    mostrarAviso("ELIMINAR PEDIDO", "¿Borrar este registro definitivamente?", async () => {
       await deleteDoc(doc(db, 'pedidos', id));
       setAvisoVisible(false);
     });
@@ -159,6 +159,7 @@ export const AdminScreen = () => {
         descripcion: descripcion.trim(),
         categoria: categoriaFinal,
         imagenes: urlsFinales,
+        // ✨ GUARDADO DE CUOTAS
         enCuotas,
         cuotasNumero: parseInt(cuotasNumero) || 3,
         cuotasValor: parseFloat(cuotasValor) || 0,
@@ -229,7 +230,10 @@ export const AdminScreen = () => {
                         setImagenes(item.imagenes || [item.imagen]); setFotoPrincipal(0);
                         setAlto(item.medidas?.alto || ''); setAncho(item.medidas?.ancho || '');
                         setProfundidad(item.medidas?.profundidad || ''); setAsa(item.medidas?.asa || ''); setPeso(item.medidas?.peso || '');
-                        setEnCuotas(item.enCuotas || false); setCuotasNumero(item.cuotasNumero?.toString() || '3'); setCuotasValor(item.cuotasValor?.toString() || '');
+                        // ✨ CARGA DE CUOTAS AL EDITAR
+                        setEnCuotas(item.enCuotas || false);
+                        setCuotasNumero(item.cuotasNumero?.toString() || '3');
+                        setCuotasValor(item.cuotasValor?.toString() || '');
                         setVista('formulario');
                     }} />
                     <IconButton icon="trash-can-outline" iconColor="red" onPress={() => {
@@ -260,7 +264,7 @@ export const AdminScreen = () => {
             }} style={styles.btnAgregarImg}><IconButton icon="camera-plus" iconColor={theme.primary} /></TouchableOpacity>}
           </View>
           
-          <TextInput label="Nombre" value={nombre} onChangeText={setNombre} mode="outlined" style={styles.input} />
+          <TextInput label="Nombre del Artículo" value={nombre} onChangeText={setNombre} mode="outlined" style={styles.input} />
           
           <Text style={styles.labelForm}>CATEGORÍA</Text>
           <SegmentedButtons
@@ -272,27 +276,28 @@ export const AdminScreen = () => {
           {categoria === 'OTRA' && <TextInput label="Nueva categoría" value={categoriaPersonalizada} onChangeText={setCategoriaPersonalizada} mode="outlined" style={styles.input} />}
 
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <TextInput label="Precio" value={precio} onChangeText={setPrecio} keyboardType="numeric" mode="outlined" style={[styles.input, { width: '48%' }]} />
+            <TextInput label="Precio Total" value={precio} onChangeText={setPrecio} keyboardType="numeric" mode="outlined" style={[styles.input, { width: '48%' }]} />
             <TextInput label="Stock" value={stock} onChangeText={setStock} keyboardType="numeric" mode="outlined" style={[styles.input, { width: '48%' }]} />
           </View>
 
-          {/* ✨ SECTOR CUOTAS REINTEGRADO ✨ */}
+          {/* ✨ SECTOR DE CUOTAS (REUBICADO Y ASEGURADO) ✨ */}
           <Surface style={styles.cuotasRow} elevation={0}>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontWeight: 'bold', fontSize: 13, color: theme.primary }}>HABILITAR PAGO EN CUOTAS</Text>
-                <Text style={{ fontSize: 10, opacity: 0.5 }}>Activa la placa de financiación en el detalle.</Text>
+                <Text style={{ fontSize: 10, opacity: 0.5 }}>Mostrar plan de financiación al cliente</Text>
               </View>
               <Switch value={enCuotas} onValueChange={setEnCuotas} color={theme.secondary} />
           </Surface>
+
           {enCuotas && (
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 }}>
-               <TextInput label="Cuotas" value={cuotasNumero} onChangeText={setCuotasNumero} keyboardType="numeric" mode="outlined" style={{ width: '30%' }} />
-               <TextInput label="Valor c/u" value={cuotasValor} onChangeText={setCuotasValor} keyboardType="numeric" mode="outlined" style={{ width: '65%' }} left={<TextInput.Affix text="$" />} />
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 }}>
+               <TextInput label="N° Cuotas" value={cuotasNumero} onChangeText={setCuotasNumero} keyboardType="numeric" mode="outlined" style={{ width: '30%' }} />
+               <TextInput label="Monto c/u" value={cuotasValor} onChangeText={setCuotasValor} keyboardType="numeric" mode="outlined" style={{ width: '65%' }} left={<TextInput.Affix text="$" />} />
             </View>
           )}
 
           <Text style={styles.labelForm}>HISTORIA / DESCRIPCIÓN</Text>
-          <TextInput placeholder="Ej: Diseño exclusivo..." value={descripcion} onChangeText={setDescripcion} mode="outlined" multiline numberOfLines={3} style={styles.input} />
+          <TextInput placeholder="Relatá los detalles de este diseño..." value={descripcion} onChangeText={setDescripcion} mode="outlined" multiline numberOfLines={3} style={styles.input} />
 
           <Text style={styles.labelForm}>FICHA TÉCNICA (SÓLO NÚMEROS)</Text>
           <Surface style={styles.fichaCont} elevation={0}>
@@ -303,18 +308,18 @@ export const AdminScreen = () => {
               </View>
               <View style={styles.filaFicha}>
                   <TextInput label="Asa" value={asa} onChangeText={setAsa} keyboardType="numeric" mode="outlined" style={{ flex: 1, marginRight: 10, backgroundColor: '#fff' }} />
-                  <TextInput label="Peso" value={peso} onChangeText={setPeso} keyboardType="numeric" mode="outlined" style={{ flex: 1, backgroundColor: '#fff' }} />
+                  <TextInput label="Peso (gr)" value={peso} onChangeText={setPeso} keyboardType="numeric" mode="outlined" style={{ flex: 1, backgroundColor: '#fff' }} />
               </View>
           </Surface>
 
           <Button mode="contained" onPress={ejecutarGuardado} loading={cargando} style={styles.btnMain} buttonColor={theme.primary} textColor="#fff">
-            {idEdicion ? "ACTUALIZAR" : "PUBLICAR"}
+            {idEdicion ? "ACTUALIZAR ARTÍCULO" : "PUBLICAR EN TIENDA"}
           </Button>
           <Button mode="text" onPress={limpiarYSalir}>CANCELAR</Button>
         </ScrollView>
       )}
 
-      {/* Vistas Balance y Ajustes se mantienen igual... */}
+      {/* 3. VISTA PEDIDOS */}
       {vista === 'pedidos' && (
         <FlatList data={pedidos} keyExtractor={(item) => item.id} contentContainerStyle={{ padding: 15 }} renderItem={({ item }) => (
             <Card style={[styles.orderCard, { borderLeftColor: item.estado === 'Pendiente' ? theme.primary : '#25D366' }]}>
@@ -333,14 +338,15 @@ export const AdminScreen = () => {
         )} />
       )}
 
+      {/* 4. BALANCE */}
       {vista === 'balance' && (
         <ScrollView contentContainerStyle={styles.formContainer}>
           <Card style={styles.metricCard}>
-            <Card.Title title="VENTAS ACUMULADAS" subtitle="Entregados" left={(props) => <IconButton {...props} icon="currency-usd" />} />
+            <Card.Title title="VENTAS ACUMULADAS" subtitle="Pedidos entregados" left={(props) => <IconButton {...props} icon="currency-usd" />} />
             <Card.Content><Text style={styles.metricValue}>${stats.totalVentas.toLocaleString()}</Text></Card.Content>
           </Card>
           <Card style={styles.metricCard}>
-            <Card.Title title="PRODUCTO ESTRELLA" subtitle="Más pedido" left={(props) => <IconButton {...props} icon="star" />} />
+            <Card.Title title="PRODUCTO ESTRELLA" subtitle="Más vendido" left={(props) => <IconButton {...props} icon="star" />} />
             <Card.Content>
               <Text style={styles.metricValue}>{stats.masVendidoNombre}</Text>
               <Text style={{opacity:0.5}}>{stats.masVendidoCant} unidades</Text>
@@ -349,17 +355,28 @@ export const AdminScreen = () => {
         </ScrollView>
       )}
 
+      {/* 5. CONFIGURACIÓN */}
       {vista === 'config' && (
         <ScrollView contentContainerStyle={styles.formContainer}>
             <Card style={styles.configCard}>
-                <Card.Title title="DATOS DE PAGO" />
+                <Card.Title title="DATOS DE PAGO" subtitle="Alias para transferencia" />
                 <Card.Content>
                     <TextInput label="Alias" value={aliasConfig} onChangeText={setAliasConfig} mode="outlined" style={{marginBottom:10}} />
-                    <TextInput label="Titular" value={titularConfig} onChangeText={setTitularConfig} mode="outlined" />
+                    <TextInput label="Titular de la cuenta" value={titularConfig} onChangeText={setTitularConfig} mode="outlined" />
                     <Button mode="contained" style={{marginTop:15}} onPress={async () => {
                         await setDoc(doc(db, 'configuracion', 'pagos'), { alias: aliasConfig, titular: titularConfig }, { merge: true });
-                        mostrarAviso("ÉXITO", "Datos guardados.");
-                    }}>GUARDAR</Button>
+                        mostrarAviso("ÉXITO", "Datos de pago actualizados.");
+                    }}>GUARDAR DATOS</Button>
+                </Card.Content>
+            </Card>
+            <Card style={styles.configCard}>
+                <Card.Title title="ESTÉTICA TEMPORAL" />
+                <Card.Content>
+                    <SegmentedButtons
+                        value={estacionActual}
+                        onValueChange={(v: string) => updateDoc(doc(db, 'configuracion', 'apariencia'), { estacionActual: v })}
+                        buttons={[{ value: 'otoño', label: '🍂' }, { value: 'invierno', label: '❄️' }, { value: 'primavera', label: '🌸' }, { value: 'verano', label: '☀️' }]}
+                    />
                 </Card.Content>
             </Card>
         </ScrollView>

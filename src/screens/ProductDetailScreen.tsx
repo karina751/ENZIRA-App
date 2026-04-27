@@ -66,11 +66,11 @@ export const ProductDetailScreen = () => {
             )}
 
             <Divider style={styles.divider} />
-            <Button mode="contained" onPress={tieneStock ? () => { addToCart(producto); setVisible(true); } : () => Linking.openURL(`https://wa.me/5493873001475?text=Consulta: ${producto.nombre}`)} buttonColor={tieneStock ? theme.primary : theme.secondary} textColor="#fff" icon={tieneStock ? "cart-plus" : "whatsapp"}>AÑADIR AL CARRITO</Button>
+            <Button mode="contained" onPress={tieneStock ? () => { addToCart(producto); setVisible(true); } : () => Linking.openURL(`https://wa.me/5493873001475?text=Consulta reingreso: ${producto.nombre}`)} buttonColor={tieneStock ? theme.primary : theme.secondary} textColor="#fff" icon={tieneStock ? "cart-plus" : "whatsapp"} style={{ borderRadius: 0 }}>{tieneStock ? 'AÑADIR AL CARRITO' : 'CONSULTAR REINGRESO'}</Button>
           </View>
         </View>
       </ScrollView>
-      <Snackbar visible={visible} onDismiss={() => setVisible(false)} duration={3000} action={{ label: 'VER', onPress: () => navigation.navigate('Cart') }}><Text style={{ color: '#fff' }}>¡Añadido! ✨</Text></Snackbar>
+      <Snackbar visible={visible} onDismiss={() => setVisible(false)} duration={3000} action={{ label: 'VER', onPress: () => navigation.navigate('Cart') }}><Text style={{ color: '#fff' }}>¡Añadido al carrito! ✨</Text></Snackbar>
     </View>
   );
 };

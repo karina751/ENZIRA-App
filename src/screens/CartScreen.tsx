@@ -13,6 +13,7 @@ export const CartScreen = () => {
   const [metodoPago, setMetodoPago] = useState('transferencia');
   const [datosPagos, setDatosPagos] = useState({ alias: 'Cargando...', titular: '' });
 
+  // Escuchar Alias de Firebase
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'configuracion', 'pagos'), (docSnap) => {
       if (docSnap.exists()) setDatosPagos({ alias: docSnap.data().alias, titular: docSnap.data().titular });
@@ -37,7 +38,7 @@ export const CartScreen = () => {
   const manejarFinalizarCompra = async () => {
     if (cart.length === 0) return;
     const usuarioActual = auth.currentUser;
-    if (!usuarioActual) { Alert.alert("ENZIRA", "Iniciá sesión."); navigation.navigate('Login'); return; }
+    if (!usuarioActual) { Alert.alert("ENZIRA", "Iniciá sesión para comprar."); navigation.navigate('Login'); return; }
 
     let mensaje = `✨ *NUEVO PEDIDO - ENZIRA* ✨\n\n`;
     mensaje += `*Cliente:* ${usuarioActual.email}\n`;
@@ -45,6 +46,7 @@ export const CartScreen = () => {
     mensaje += `----------------------------------\n`;
     cart.forEach((item: any) => { mensaje += `🛍️ *${item.nombre.toUpperCase()}* x${item.quantity}\n`; });
     mensaje += `\n💰 *TOTAL: $${totalAmount.toFixed(0)}*`;
+    if(metodoPago === 'transferencia') mensaje += `\n🏦 *Alias:* ${datosPagos.alias}`;
 
     try {
       await addDoc(collection(db, 'pedidos'), {
@@ -52,7 +54,7 @@ export const CartScreen = () => {
       });
       Linking.openURL(`https://wa.me/5493873001475?text=${encodeURIComponent(mensaje)}`);
       setAvisoVisible(true);
-    } catch (e) { Alert.alert("ERROR", "Falló el registro."); }
+    } catch (e) { Alert.alert("ERROR", "No se pudo registrar el pedido."); }
   };
 
   const finalFlujo = () => { setAvisoVisible(false); clearCart(); navigation.navigate('Home'); };
@@ -101,11 +103,11 @@ export const CartScreen = () => {
 
           <View style={styles.filaFooter}>
             <View>
-              <Text style={styles.labelTotal}>TOTAL</Text>
+              <Text style={styles.labelTotal}>TOTAL FINAL</Text>
               <Text style={styles.montoTotal}>${totalAmount.toFixed(0)}</Text>
               {acumulado > 0 && <Text style={styles.labelCuotas}>{cuotasSugeridas} cuotas de ${acumulado.toFixed(0)}</Text>}
             </View>
-            <Button mode="contained" onPress={manejarFinalizarCompra} buttonColor="#002147" icon="whatsapp" style={{borderRadius:0}}>SOLICITAR</Button>
+            <Button mode="contained" onPress={manejarFinalizarCompra} buttonColor="#002147" icon="whatsapp" style={{borderRadius: 0}}>SOLICITAR</Button>
           </View>
         </Surface>
       )}
@@ -113,7 +115,7 @@ export const CartScreen = () => {
       <Portal>
         <Dialog visible={avisoVisible} onDismiss={finalFlujo} style={{ borderRadius: 0, backgroundColor: '#fff' }}>
           <Dialog.Title>¡PEDIDO ENVIADO! ✨</Dialog.Title>
-          <Dialog.Content><Text>Mariel recibió tu mensaje. Coordiná el envío con ella.</Text></Dialog.Content>
+          <Dialog.Content><Text>Mariel recibió tu mensaje. Coordiná el pago y envío con ella.</Text></Dialog.Content>
           <Dialog.Actions><Button mode="contained" buttonColor="#002147" onPress={finalFlujo} textColor="#fff">ACEPTAR</Button></Dialog.Actions>
         </Dialog>
       </Portal>
