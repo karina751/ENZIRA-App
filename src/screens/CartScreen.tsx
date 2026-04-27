@@ -9,21 +9,13 @@ import { collection, addDoc, doc, onSnapshot } from 'firebase/firestore';
 export const CartScreen = () => {
   const navigation = useNavigation<any>();
   const { cart, removeFromCart, updateQuantity, totalAmount, clearCart } = useCart();
-  
   const [avisoVisible, setAvisoVisible] = useState(false);
   const [metodoPago, setMetodoPago] = useState('transferencia');
-  
-  // ✨ DATOS DINÁMICOS DE FIREBASE ✨
-  const [datosBancarios, setDatosBancarios] = useState({ alias: 'Cargando...', titular: '' });
+  const [datosPagos, setDatosPagos] = useState({ alias: 'Cargando...', titular: '' });
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'configuracion', 'pagos'), (docSnap) => {
-      if (docSnap.exists()) {
-        setDatosBancarios({
-          alias: docSnap.data().alias,
-          titular: docSnap.data().titular
-        });
-      }
+      if (docSnap.exists()) setDatosPagos({ alias: docSnap.data().alias, titular: docSnap.data().titular });
     });
     return () => unsub();
   }, []);
@@ -48,24 +40,15 @@ export const CartScreen = () => {
     if (!usuarioActual) { Alert.alert("ENZIRA", "Iniciá sesión."); navigation.navigate('Login'); return; }
 
     let mensaje = `✨ *NUEVO PEDIDO - ENZIRA* ✨\n\n`;
-    mensaje += `👤 *Cliente:* ${usuarioActual.email}\n`;
-    mensaje += `💳 *Método de Pago:* ${metodoPago.toUpperCase()}\n`;
+    mensaje += `*Cliente:* ${usuarioActual.email}\n`;
+    mensaje += `*Pago:* ${metodoPago.toUpperCase()}\n`;
     mensaje += `----------------------------------\n`;
-    cart.forEach((item: any) => {
-      mensaje += `🛍️ *${item.nombre.toUpperCase()}* x${item.quantity} ($${item.precio.toFixed(0)})\n`;
-    });
+    cart.forEach((item: any) => { mensaje += `🛍️ *${item.nombre.toUpperCase()}* x${item.quantity}\n`; });
     mensaje += `\n💰 *TOTAL: $${totalAmount.toFixed(0)}*`;
-    if(metodoPago === 'transferencia') mensaje += `\n🏦 *Alias:* ${datosBancarios.alias}`;
 
     try {
       await addDoc(collection(db, 'pedidos'), {
-        clienteEmail: usuarioActual.email,
-        clienteUid: usuarioActual.uid,
-        items: cart,
-        total: totalAmount,
-        metodoPago: metodoPago,
-        estado: 'Pendiente',
-        fecha: new Date()
+        clienteEmail: usuarioActual.email, clienteUid: usuarioActual.uid, items: cart, total: totalAmount, metodoPago, estado: 'Pendiente', fecha: new Date()
       });
       Linking.openURL(`https://wa.me/5493873001475?text=${encodeURIComponent(mensaje)}`);
       setAvisoVisible(true);
@@ -79,20 +62,20 @@ export const CartScreen = () => {
       <FlatList
         data={cart}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: 15, paddingBottom: 260 }}
+        contentContainerStyle={{ paddingBottom: 250 }}
         renderItem={({ item }: { item: any }) => (
           <Surface style={styles.itemTarjeta} elevation={1}>
             <Image source={{ uri: item.imagenes ? item.imagenes[0] : item.imagen }} style={styles.imagenItem} />
             <View style={styles.infoItem}>
               <Text style={styles.nombreItem}>{item.nombre.toUpperCase()}</Text>
-              <Text style={styles.precioUnitario}>${item.precio.toFixed(0)}</Text>
+              <Text style={styles.precioUnitario}>${item.precio}</Text>
               <View style={styles.controlesCantidad}>
                 <IconButton icon="minus-circle-outline" size={18} onPress={() => updateQuantity(item.id, item.quantity - 1)} disabled={item.quantity <= 1} />
                 <Text style={styles.cantidadTexto}>{item.quantity}</Text>
                 <IconButton icon="plus-circle-outline" size={18} onPress={() => updateQuantity(item.id, item.quantity + 1)} />
               </View>
             </View>
-            <IconButton icon="trash-can-outline" iconColor="#B22222" size={20} onPress={() => removeFromCart(item.id)} />
+            <IconButton icon="trash-can-outline" iconColor="red" size={20} onPress={() => removeFromCart(item.id)} />
           </Surface>
         )}
       />
@@ -109,27 +92,27 @@ export const CartScreen = () => {
                 theme={{ colors: { secondaryContainer: '#002147', onSecondaryContainer: '#fff' } }}
             />
             {metodoPago === 'transferencia' && (
-                <View style={styles.infoPagoBox}>
-                    <Text style={{fontSize: 11}}>Alias: **{datosBancarios.alias}**</Text>
-                    <Text style={{fontSize: 11}}>Titular: {datosBancarios.titular}</Text>
-                </View>
+              <View style={styles.infoPagoBox}>
+                <Text style={{fontSize: 11}}>Alias: **{datosPagos.alias}**</Text>
+                <Text style={{fontSize: 11}}>Titular: {datosPagos.titular}</Text>
+              </View>
             )}
           </View>
 
           <View style={styles.filaFooter}>
             <View>
-              <Text style={styles.labelTotal}>TOTAL FINAL</Text>
+              <Text style={styles.labelTotal}>TOTAL</Text>
               <Text style={styles.montoTotal}>${totalAmount.toFixed(0)}</Text>
               {acumulado > 0 && <Text style={styles.labelCuotas}>{cuotasSugeridas} cuotas de ${acumulado.toFixed(0)}</Text>}
             </View>
-            <Button mode="contained" onPress={manejarFinalizarCompra} buttonColor="#002147" icon="whatsapp" style={{borderRadius: 0}}>SOLICITAR</Button>
+            <Button mode="contained" onPress={manejarFinalizarCompra} buttonColor="#002147" icon="whatsapp" style={{borderRadius:0}}>SOLICITAR</Button>
           </View>
         </Surface>
       )}
 
       <Portal>
         <Dialog visible={avisoVisible} onDismiss={finalFlujo} style={{ borderRadius: 0, backgroundColor: '#fff' }}>
-          <Dialog.Title style={{ color: '#002147' }}>¡PEDIDO ENVIADO! ✨</Dialog.Title>
+          <Dialog.Title>¡PEDIDO ENVIADO! ✨</Dialog.Title>
           <Dialog.Content><Text>Mariel recibió tu pedido. Coordiná el pago y envío por WhatsApp.</Text></Dialog.Content>
           <Dialog.Actions><Button mode="contained" buttonColor="#002147" onPress={finalFlujo} textColor="#fff">ACEPTAR</Button></Dialog.Actions>
         </Dialog>
