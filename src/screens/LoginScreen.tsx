@@ -83,21 +83,29 @@ export const LoginScreen = () => {
     setCargando(true);
     try {
       if (esRegistro) {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
         await setDoc(doc(db, 'usuarios', userCredential.user.uid), {
-          email: email,
+          email: email.trim(),
           rol: 'cliente',
           fechaCreado: new Date()
         });
         dispararAviso("¡Bienvenida! Cuenta creada con éxito.");
       } else {
-        await signInWithEmailAndPassword(auth, email, password);
+        await signInWithEmailAndPassword(auth, email.trim(), password);
       }
+
+      // ✨ CAMBIO CLAVE: Redireccionamos al Home después de un ingreso exitoso ✨
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Home' }],
+      });
+
     } catch (error: any) {
+      console.error(error);
       let mensaje = "Error en la autenticación.";
       if (error.code === 'auth/email-already-in-use') mensaje = "Este email ya está registrado.";
-      if (error.code === 'auth/invalid-credential') mensaje = "Credenciales incorrectas.";
-      if (error.code === 'auth/weak-password') mensaje = "Mínimo 6 caracteres.";
+      if (error.code === 'auth/invalid-credential') mensaje = "Credenciales incorrectas. Verificá tus datos.";
+      if (error.code === 'auth/weak-password') mensaje = "La contraseña debe tener mínimo 6 caracteres.";
       dispararAviso(mensaje);
     } finally {
       setCargando(false);
@@ -109,7 +117,7 @@ export const LoginScreen = () => {
     navigation.navigate('Home');
   };
 
-  // --- VISTA A: PERFIL DEL CLIENTE (Logueado) ---
+  // --- VISTA A: PERFIL DEL CLIENTE (Si entra estando ya logueado) ---
   if (user) {
     return (
       <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -219,6 +227,7 @@ export const LoginScreen = () => {
               style={styles.input}
               textColor={theme.text}
               autoCapitalize="none"
+              keyboardType="email-address"
             />
 
             <TextInput
