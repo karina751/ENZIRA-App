@@ -45,12 +45,10 @@ export const AdminScreen = () => {
   const [categoriaPersonalizada, setCategoriaPersonalizada] = useState(''); 
   const [imagenes, setImagenes] = useState<string[]>([]);
   const [fotoPrincipal, setFotoPrincipal] = useState(0); 
-  
-  // ✨ ESTADOS DE CUOTAS (Asegurados) ✨
   const [enCuotas, setEnCuotas] = useState(false);
   const [cuotasNumero, setCuotasNumero] = useState('3'); 
   const [cuotasValor, setCuotasValor] = useState('');
-
+  
   // Ficha Técnica
   const [alto, setAlto] = useState('');
   const [ancho, setAncho] = useState('');
@@ -61,6 +59,13 @@ export const AdminScreen = () => {
   // Configuración de Pagos
   const [aliasConfig, setAliasConfig] = useState('');
   const [titularConfig, setTitularConfig] = useState('');
+
+  // ✨ ESTADOS PARA GESTIÓN DE PEDIDOS ✨
+  const [filtroPedidos, setFiltroPedidos] = useState('Pendiente');
+  const [modalPedido, setModalPedido] = useState(false);
+  const [pedidoSeleccionado, setPedidoSeleccionado] = useState<any>(null);
+  const [editPago, setEditPago] = useState('');
+  const [editObs, setEditObs] = useState('');
 
   // --- 🔥 CARGA DE DATOS REAL TIME ---
   useEffect(() => {
@@ -109,7 +114,7 @@ export const AdminScreen = () => {
 
   const stats = obtenerEstadisticas();
 
-  // --- 🛠️ FUNCIONES ---
+  // --- 🛠️ FUNCIONES GENERALES ---
   const cambiarVista = (nuevaVista: string) => { setVista(nuevaVista); setMenuVisible(false); };
   
   const mostrarAviso = (titulo: string, mensaje: string, accion?: () => void, error = false) => {
@@ -117,13 +122,40 @@ export const AdminScreen = () => {
     setAvisoVisible(true);
   };
 
+  // --- 📦 FUNCIONES DE PEDIDOS ---
   const borrarPedido = (id: string) => {
-    mostrarAviso("ELIMINAR PEDIDO", "¿Borrar este registro definitivamente?", async () => {
+    mostrarAviso("ELIMINAR PEDIDO", "¿Borrar este registro del historial?", async () => {
       await deleteDoc(doc(db, 'pedidos', id));
       setAvisoVisible(false);
     });
   };
 
+  const abrirEditorPedido = (pedido: any) => {
+      setPedidoSeleccionado(pedido);
+      setEditPago(pedido.metodoPago || '');
+      setEditObs(pedido.observacion || '');
+      setModalPedido(true);
+  };
+
+  const guardarEdicionPedido = async () => {
+      if (!pedidoSeleccionado) return;
+      setCargando(true);
+      try {
+          await updateDoc(doc(db, 'pedidos', pedidoSeleccionado.id), {
+              metodoPago: editPago,
+              observacion: editObs
+          });
+          setModalPedido(false);
+          setPedidoSeleccionado(null);
+          mostrarAviso("ÉXITO", "Detalles del pedido actualizados.");
+      } catch (error) {
+          mostrarAviso("ERROR", "No se pudo actualizar el pedido.", undefined, true);
+      } finally {
+          setCargando(false);
+      }
+  };
+
+  // --- 👜 FUNCIONES DE PRODUCTOS ---
   const ejecutarGuardado = async () => {
     const categoriaFinal = (categoria === 'OTRA') ? categoriaPersonalizada.trim() : categoria;
     if (!nombre || !precio || imagenes.length === 0 || !categoriaFinal) {
@@ -159,7 +191,6 @@ export const AdminScreen = () => {
         descripcion: descripcion.trim(),
         categoria: categoriaFinal,
         imagenes: urlsFinales,
-        // ✨ GUARDADO DE CUOTAS
         enCuotas,
         cuotasNumero: parseInt(cuotasNumero) || 3,
         cuotasValor: parseFloat(cuotasValor) || 0,
@@ -230,10 +261,7 @@ export const AdminScreen = () => {
                         setImagenes(item.imagenes || [item.imagen]); setFotoPrincipal(0);
                         setAlto(item.medidas?.alto || ''); setAncho(item.medidas?.ancho || '');
                         setProfundidad(item.medidas?.profundidad || ''); setAsa(item.medidas?.asa || ''); setPeso(item.medidas?.peso || '');
-                        // ✨ CARGA DE CUOTAS AL EDITAR
-                        setEnCuotas(item.enCuotas || false);
-                        setCuotasNumero(item.cuotasNumero?.toString() || '3');
-                        setCuotasValor(item.cuotasValor?.toString() || '');
+                        setEnCuotas(item.enCuotas || false); setCuotasNumero(item.cuotasNumero?.toString() || '3'); setCuotasValor(item.cuotasValor?.toString() || '');
                         setVista('formulario');
                     }} />
                     <IconButton icon="trash-can-outline" iconColor="red" onPress={() => {
@@ -280,7 +308,6 @@ export const AdminScreen = () => {
             <TextInput label="Stock" value={stock} onChangeText={setStock} keyboardType="numeric" mode="outlined" style={[styles.input, { width: '48%' }]} />
           </View>
 
-          {/* ✨ SECTOR DE CUOTAS (REUBICADO Y ASEGURADO) ✨ */}
           <Surface style={styles.cuotasRow} elevation={0}>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontWeight: 'bold', fontSize: 13, color: theme.primary }}>HABILITAR PAGO EN CUOTAS</Text>
@@ -319,23 +346,64 @@ export const AdminScreen = () => {
         </ScrollView>
       )}
 
-      {/* 3. VISTA PEDIDOS */}
+      {/* 3. VISTA PEDIDOS (OPTIMIZADA) ✨ */}
       {vista === 'pedidos' && (
-        <FlatList data={pedidos} keyExtractor={(item) => item.id} contentContainerStyle={{ padding: 15 }} renderItem={({ item }) => (
-            <Card style={[styles.orderCard, { borderLeftColor: item.estado === 'Pendiente' ? theme.primary : '#25D366' }]}>
-              <Card.Content>
-                <View style={styles.orderHeader}>
-                  <Text style={styles.orderEmail}>{item.clienteEmail}</Text>
-                  <IconButton icon="trash-can-outline" iconColor="red" size={20} onPress={() => borrarPedido(item.id)} />
-                </View>
-                {item.items?.map((prod: any, idx: number) => (<Text key={idx} style={{ fontSize: 13 }}>• {prod.nombre} (x{prod.quantity || 1})</Text>))}
-                <Text style={styles.orderTotal}>TOTAL: ${item.total}</Text>
-              </Card.Content>
-              <Card.Actions>
-                {item.estado === 'Pendiente' && <Button mode="contained" buttonColor={theme.primary} onPress={() => updateDoc(doc(db, 'pedidos', item.id), { estado: 'Entregado' })}>ENTREGADO</Button>}
-              </Card.Actions>
-            </Card>
-        )} />
+        <View style={{ flex: 1 }}>
+            <View style={{ padding: 15, paddingBottom: 5 }}>
+                <SegmentedButtons
+                    value={filtroPedidos}
+                    onValueChange={setFiltroPedidos}
+                    buttons={[
+                        { value: 'Pendiente', label: 'PENDIENTES', icon: 'clock-outline' },
+                        { value: 'Entregado', label: 'ENTREGADOS', icon: 'check-all' }
+                    ]}
+                    theme={{ colors: { secondaryContainer: theme.primary, onSecondaryContainer: '#fff' } }}
+                />
+            </View>
+
+            <FlatList 
+                data={pedidos.filter(p => p.estado === filtroPedidos)} 
+                keyExtractor={(item) => item.id} 
+                contentContainerStyle={{ padding: 15 }} 
+                ListEmptyComponent={<Text style={{textAlign: 'center', opacity: 0.5, marginTop: 50}}>No hay pedidos en esta sección.</Text>}
+                renderItem={({ item }) => (
+                <Card style={[styles.orderCard, { borderLeftColor: item.estado === 'Pendiente' ? theme.primary : '#25D366' }]}>
+                    <Card.Content>
+                        <View style={styles.orderHeader}>
+                            <View>
+                                <Text style={styles.orderEmail}>{item.clienteEmail}</Text>
+                                <Text style={{fontSize: 10, opacity: 0.5, marginTop: 2}}>
+                                    {item.fecha?.toDate ? item.fecha.toDate().toLocaleDateString() : ''} | Pago: {item.metodoPago || 'No asignado'}
+                                </Text>
+                            </View>
+                            <View style={{ flexDirection: 'row' }}>
+                                <IconButton icon="pencil-outline" iconColor={theme.primary} size={20} onPress={() => abrirEditorPedido(item)} />
+                                <IconButton icon="trash-can-outline" iconColor="red" size={20} onPress={() => borrarPedido(item.id)} />
+                            </View>
+                        </View>
+                        
+                        <Divider style={{ marginVertical: 10, opacity: 0.2 }} />
+
+                        {item.items?.map((prod: any, idx: number) => (<Text key={idx} style={{ fontSize: 13 }}>• {prod.nombre} (x{prod.quantity || 1})</Text>))}
+                        
+                        {item.observacion && (
+                            <Surface style={styles.obsBox} elevation={0}>
+                                <Text style={{ fontSize: 11, fontStyle: 'italic', color: '#856404' }}>📌 Obs: {item.observacion}</Text>
+                            </Surface>
+                        )}
+
+                        <Text style={styles.orderTotal}>TOTAL: ${item.total}</Text>
+                    </Card.Content>
+                    <Card.Actions>
+                        {item.estado === 'Pendiente' ? (
+                            <Button mode="contained" buttonColor={theme.primary} onPress={() => updateDoc(doc(db, 'pedidos', item.id), { estado: 'Entregado' })}>MARCAR ENTREGADO</Button>
+                        ) : (
+                            <Button mode="text" textColor={theme.primary} onPress={() => updateDoc(doc(db, 'pedidos', item.id), { estado: 'Pendiente' })}>VOLVER A PENDIENTE</Button>
+                        )}
+                    </Card.Actions>
+                </Card>
+            )} />
+        </View>
       )}
 
       {/* 4. BALANCE */}
@@ -346,7 +414,7 @@ export const AdminScreen = () => {
             <Card.Content><Text style={styles.metricValue}>${stats.totalVentas.toLocaleString()}</Text></Card.Content>
           </Card>
           <Card style={styles.metricCard}>
-            <Card.Title title="PRODUCTO ESTRELLA" subtitle="Más vendido" left={(props) => <IconButton {...props} icon="star" />} />
+            <Card.Title title="PRODUCTO ESTRELLA" subtitle="Más pedido" left={(props) => <IconButton {...props} icon="star" />} />
             <Card.Content>
               <Text style={styles.metricValue}>{stats.masVendidoNombre}</Text>
               <Text style={{opacity:0.5}}>{stats.masVendidoCant} unidades</Text>
@@ -382,7 +450,9 @@ export const AdminScreen = () => {
         </ScrollView>
       )}
 
+      {/* ✨ PORTALES DE AVISOS Y EDICIÓN ✨ */}
       <Portal>
+        {/* Modal de Aviso General */}
         <Dialog visible={avisoVisible} onDismiss={() => setAvisoVisible(false)} style={{ borderRadius: 0, backgroundColor: '#fff' }}>
           <Dialog.Title>{avisoConfig.titulo}</Dialog.Title>
           <Dialog.Content><Text>{avisoConfig.mensaje}</Text></Dialog.Content>
@@ -391,7 +461,37 @@ export const AdminScreen = () => {
             <Button mode="contained" onPress={avisoConfig.accion}>ACEPTAR</Button>
           </Dialog.Actions>
         </Dialog>
+
+        {/* ✨ Modal Editor de Pedido ✨ */}
+        <Dialog visible={modalPedido} onDismiss={() => setModalPedido(false)} style={{ borderRadius: 0, backgroundColor: '#fff' }}>
+          <Dialog.Title style={{ color: theme.primary }}>EDITAR PEDIDO</Dialog.Title>
+          <Dialog.Content>
+            <TextInput 
+                label="Método de Pago" 
+                value={editPago} 
+                onChangeText={setEditPago} 
+                mode="outlined" 
+                style={{ marginBottom: 15, backgroundColor: '#fff' }} 
+                placeholder="Ej: Transferencia, Efectivo..."
+            />
+            <TextInput 
+                label="Observación Interna" 
+                value={editObs} 
+                onChangeText={setEditObs} 
+                mode="outlined" 
+                multiline 
+                numberOfLines={3}
+                style={{ backgroundColor: '#fff' }} 
+                placeholder="Ej: Retira el viernes a las 18hs."
+            />
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setModalPedido(false)} textColor={theme.primary}>CANCELAR</Button>
+            <Button mode="contained" onPress={guardarEdicionPedido} loading={cargando} buttonColor={theme.primary}>GUARDAR</Button>
+          </Dialog.Actions>
+        </Dialog>
       </Portal>
+
     </View>
   );
 };
@@ -416,10 +516,14 @@ const styles = StyleSheet.create({
   miniImgContainer: { position: 'relative' },
   miniImg: { width: 50, height: 65, marginLeft: 10 },
   badgeStock: { position: 'absolute', top: -5, right: -5 },
+  
+  // Estilos de Pedidos Optimizados
   orderCard: { marginBottom: 15, borderLeftWidth: 5, backgroundColor: '#fff', borderRadius: 0 },
-  orderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  orderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   orderEmail: { fontSize: 13, fontWeight: 'bold' },
   orderTotal: { fontSize: 16, fontWeight: 'bold', marginTop: 10, textAlign: 'right' },
+  obsBox: { backgroundColor: '#fff3cd', padding: 8, marginTop: 10, borderLeftWidth: 3, borderLeftColor: '#ffeeba' },
+
   metricCard: { marginBottom: 15, backgroundColor: '#fff' },
   metricValue: { fontSize: 24, fontWeight: 'bold', color: '#002147' },
   configCard: { marginBottom: 20, borderLeftWidth: 4, borderLeftColor: '#CFAF68', backgroundColor: '#fff', borderRadius: 0 },
