@@ -39,6 +39,7 @@ export const AdminScreen = () => {
   const [idEdicion, setIdEdicion] = useState<string | null>(null);
   const [nombre, setNombre] = useState('');
   const [precio, setPrecio] = useState('');
+  const [costo, setCosto] = useState(''); // ✨ NUEVO: COSTO DE PRODUCCIÓN
   const [stock, setStock] = useState(''); 
   const [descripcion, setDescripcion] = useState('');
   const [categoria, setCategoria] = useState('Carteras'); 
@@ -60,13 +61,16 @@ export const AdminScreen = () => {
   const [aliasConfig, setAliasConfig] = useState('');
   const [titularConfig, setTitularConfig] = useState('');
 
-  // ✨ ESTADOS PARA GESTIÓN DE PEDIDOS ✨
+  // Gestión de Pedidos
   const [filtroPedidos, setFiltroPedidos] = useState('Pendiente');
-  const [busquedaPedido, setBusquedaPedido] = useState(''); // <-- Nuevo estado buscador
+  const [busquedaPedido, setBusquedaPedido] = useState('');
   const [modalPedido, setModalPedido] = useState(false);
   const [pedidoSeleccionado, setPedidoSeleccionado] = useState<any>(null);
   const [editPago, setEditPago] = useState('');
   const [editObs, setEditObs] = useState('');
+
+  // Configuración de Gráficos
+  const [vistaGrafico, setVistaGrafico] = useState('semana');
 
   // --- 🔥 CARGA DE DATOS REAL TIME ---
   useEffect(() => {
@@ -98,19 +102,60 @@ export const AdminScreen = () => {
     return () => { unsubEstilo(); unsubProd(); unsubOrders(); unsubPagos(); };
   }, []);
 
-  // --- 📊 LÓGICA DE BALANCE ---
+  // --- 📊 LÓGICA DE REPORTES, GANANCIAS Y GRÁFICOS ✨ ---
   const obtenerEstadisticas = () => {
     const entregados = pedidos.filter(p => p.estado === 'Entregado');
-    const totalVentas = entregados.reduce((acc, p) => acc + (parseFloat(p.total) || 0), 0);
+    let totalVentas = 0;
+    let totalCostos = 0;
     const conteoProd: Record<string, number> = {};
+    
+    // Arrays para gráfico semanal (últimos 7 días)
+    const ventasPorDia: Record<string, number> = {};
+    const hoy = new Date();
+    for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(hoy.getDate() - i);
+        ventasPorDia[d.toLocaleDateString('es-AR', { weekday: 'short' })] = 0;
+    }
+
     entregados.forEach(p => {
+      totalVentas += (parseFloat(p.total) || 0);
+      
+      // Clasificación para gráfico
+      if (p.fecha && p.fecha.toDate) {
+          const fechaPedido = p.fecha.toDate();
+          const difDias = Math.floor((hoy.getTime() - fechaPedido.getTime()) / (1000 * 3600 * 24));
+          if (difDias <= 6) {
+              const diaStr = fechaPedido.toLocaleDateString('es-AR', { weekday: 'short' });
+              if (ventasPorDia[diaStr] !== undefined) {
+                  ventasPorDia[diaStr] += (parseFloat(p.total) || 0);
+              }
+          }
+      }
+
+      // Cálculo de Costos y Productos
       p.items?.forEach((item: any) => {
         const n = item.nombre || 'Desconocido';
-        conteoProd[n] = (conteoProd[n] || 0) + (item.quantity || 1);
+        const q = item.quantity || 1;
+        conteoProd[n] = (conteoProd[n] || 0) + q;
+        // Sumar costos (Si el producto viejo no tiene costo, asume 50% de ganancia por defecto)
+        const costoUnitario = item.costo ? parseFloat(item.costo) : (item.precio * 0.5);
+        totalCostos += (costoUnitario * q);
       });
     });
+
     const masVendido = Object.entries(conteoProd).sort((a, b) => b[1] - a[1])[0] || ["Ninguno", 0];
-    return { totalVentas, masVendidoNombre: String(masVendido[0]), masVendidoCant: Number(masVendido[1]) };
+    const gananciaNeta = totalVentas - totalCostos;
+
+    // Formatear datos para el gráfico
+    const maxVentaDia = Math.max(...Object.values(ventasPorDia), 1); // Evitar división por 0
+    const graficoData = Object.keys(ventasPorDia).map(dia => ({
+        label: dia.toUpperCase(),
+        valor: ventasPorDia[dia],
+        porcentaje: (ventasPorDia[dia] / maxVentaDia) * 100
+    }));
+
+    return { totalVentas, gananciaNeta, masVendidoNombre: String(masVendido[0]), masVendidoCant: Number(masVendido[1]), graficoData, maxVentaDia };
   };
 
   const stats = obtenerEstadisticas();
@@ -156,7 +201,6 @@ export const AdminScreen = () => {
       }
   };
 
-  // Filtrado de pedidos por estado y buscador
   const pedidosFiltrados = pedidos.filter(p => {
     const coincideEstado = p.estado === filtroPedidos;
     const coincideBusqueda = p.clienteEmail?.toLowerCase().includes(busquedaPedido.toLowerCase());
@@ -195,6 +239,7 @@ export const AdminScreen = () => {
       const payload = { 
         nombre: nombre.trim(), 
         precio: parseFloat(precio) || 0, 
+        costo: parseFloat(costo) || 0, // ✨ SE GUARDA EL COSTO
         stock: parseInt(stock) || 0, 
         descripcion: descripcion.trim(),
         categoria: categoriaFinal,
@@ -218,7 +263,7 @@ export const AdminScreen = () => {
   };
 
   const limpiarYSalir = () => {
-    setIdEdicion(null); setNombre(''); setPrecio(''); setStock(''); setDescripcion('');
+    setIdEdicion(null); setNombre(''); setPrecio(''); setCosto(''); setStock(''); setDescripcion('');
     setCategoria('Carteras'); setCategoriaPersonalizada(''); setImagenes([]);
     setAlto(''); setAncho(''); setProfundidad(''); setAsa(''); setPeso('');
     setEnCuotas(false); setCuotasNumero('3'); setCuotasValor('');
@@ -240,9 +285,9 @@ export const AdminScreen = () => {
           contentStyle={{ backgroundColor: '#fff' }}
         >
           <Menu.Item leadingIcon="package-variant" onPress={() => cambiarVista('lista')} title="Stock" />
-          <Menu.Item leadingIcon="plus-circle-outline" onPress={() => cambiarVista('formulario')} title="Nuevo" />
+          <Menu.Item leadingIcon="plus-circle-outline" onPress={() => cambiarVista('formulario')} title="Nuevo Artículo" />
           <Menu.Item leadingIcon="bell-outline" onPress={() => cambiarVista('pedidos')} title="Pedidos" />
-          <Menu.Item leadingIcon="chart-bar" onPress={() => cambiarVista('balance')} title="Balance" />
+          <Menu.Item leadingIcon="chart-bar" onPress={() => cambiarVista('inventario')} title="Inventario y Reportes" />
           <Divider />
           <Menu.Item leadingIcon="palette-outline" onPress={() => cambiarVista('config')} title="Ajustes" />
         </Menu>
@@ -265,7 +310,7 @@ export const AdminScreen = () => {
                   <View style={{flexDirection: 'row'}}>
                     <IconButton icon="pencil-outline" iconColor={theme.primary} onPress={() => {
                         setIdEdicion(item.id); setNombre(item.nombre); setPrecio(item.precio.toString());
-                        setStock(item.stock?.toString() || '0'); setDescripcion(item.descripcion || '');
+                        setCosto(item.costo?.toString() || ''); setStock(item.stock?.toString() || '0'); setDescripcion(item.descripcion || '');
                         setImagenes(item.imagenes || [item.imagen]); setFotoPrincipal(0);
                         setAlto(item.medidas?.alto || ''); setAncho(item.medidas?.ancho || '');
                         setProfundidad(item.medidas?.profundidad || ''); setAsa(item.medidas?.asa || ''); setPeso(item.medidas?.peso || '');
@@ -282,7 +327,7 @@ export const AdminScreen = () => {
         )} />
       )}
 
-      {/* 2. FORMULARIO PRODUCTO */}
+      {/* 2. FORMULARIO PRODUCTO (CON COSTO) ✨ */}
       {vista === 'formulario' && (
         <ScrollView contentContainerStyle={styles.formContainer} keyboardShouldPersistTaps="handled">
           <Text style={styles.labelForm}>FOTOS (TOCÁ PORTADA ⭐)</Text>
@@ -302,7 +347,6 @@ export const AdminScreen = () => {
           
           <TextInput label="Nombre del Artículo" value={nombre} onChangeText={setNombre} mode="outlined" style={styles.input} />
           
-          <Text style={styles.labelForm}>CATEGORÍA</Text>
           <SegmentedButtons
             value={categoria}
             onValueChange={(val: string) => { setCategoria(val); if (val !== 'OTRA') setCategoriaPersonalizada(''); }}
@@ -311,15 +355,19 @@ export const AdminScreen = () => {
           />
           {categoria === 'OTRA' && <TextInput label="Nueva categoría" value={categoriaPersonalizada} onChangeText={setCategoriaPersonalizada} mode="outlined" style={styles.input} />}
 
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <TextInput label="Precio Total" value={precio} onChangeText={setPrecio} keyboardType="numeric" mode="outlined" style={[styles.input, { width: '48%' }]} />
-            <TextInput label="Stock" value={stock} onChangeText={setStock} keyboardType="numeric" mode="outlined" style={[styles.input, { width: '48%' }]} />
-          </View>
+          <Surface style={styles.costoCont} elevation={0}>
+              <Text style={{fontSize: 10, fontWeight: 'bold', color: '#B00020', marginBottom: 10}}>FINANZAS DEL ARTÍCULO (PRIVADO)</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <TextInput label="Costo Fabricación" value={costo} onChangeText={setCosto} keyboardType="numeric" mode="outlined" style={[styles.inputFicha, { width: '48%' }]} left={<TextInput.Affix text="$" />} />
+                  <TextInput label="Precio Venta" value={precio} onChangeText={setPrecio} keyboardType="numeric" mode="outlined" style={[styles.inputFicha, { width: '48%' }]} left={<TextInput.Affix text="$" />} />
+              </View>
+          </Surface>
+
+          <TextInput label="Unidades en Stock" value={stock} onChangeText={setStock} keyboardType="numeric" mode="outlined" style={styles.input} />
 
           <Surface style={styles.cuotasRow} elevation={0}>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontWeight: 'bold', fontSize: 13, color: theme.primary }}>HABILITAR PAGO EN CUOTAS</Text>
-                <Text style={{ fontSize: 10, opacity: 0.5 }}>Mostrar plan de financiación al cliente</Text>
+                <Text style={{ fontWeight: 'bold', fontSize: 13, color: theme.primary }}>HABILITAR CUOTAS</Text>
               </View>
               <Switch value={enCuotas} onValueChange={setEnCuotas} color={theme.secondary} />
           </Surface>
@@ -332,9 +380,9 @@ export const AdminScreen = () => {
           )}
 
           <Text style={styles.labelForm}>HISTORIA / DESCRIPCIÓN</Text>
-          <TextInput placeholder="Relatá los detalles de este diseño..." value={descripcion} onChangeText={setDescripcion} mode="outlined" multiline numberOfLines={3} style={styles.input} />
+          <TextInput placeholder="Relatá los detalles..." value={descripcion} onChangeText={setDescripcion} mode="outlined" multiline numberOfLines={3} style={styles.input} />
 
-          <Text style={styles.labelForm}>FICHA TÉCNICA (SÓLO NÚMEROS)</Text>
+          <Text style={styles.labelForm}>FICHA TÉCNICA (NÚMEROS)</Text>
           <Surface style={styles.fichaCont} elevation={0}>
               <View style={styles.filaFicha}>
                   <TextInput label="Alto" value={alto} onChangeText={setAlto} keyboardType="numeric" mode="outlined" style={styles.inputFicha} />
@@ -354,7 +402,7 @@ export const AdminScreen = () => {
         </ScrollView>
       )}
 
-      {/* 3. VISTA PEDIDOS (CON BUSCADOR Y PESTAÑAS) ✨ */}
+      {/* 3. VISTA PEDIDOS */}
       {vista === 'pedidos' && (
         <View style={{ flex: 1 }}>
             <View style={{ padding: 15, paddingBottom: 5 }}>
@@ -362,14 +410,12 @@ export const AdminScreen = () => {
                     value={filtroPedidos}
                     onValueChange={setFiltroPedidos}
                     buttons={[
-                        { value: 'Pendiente', label: 'PENDIENTES', icon: 'clock-outline' },
-                        { value: 'Entregado', label: 'ENTREGADOS', icon: 'check-all' }
+                        { value: 'Pendiente', label: 'PENDIENTES' },
+                        { value: 'Entregado', label: 'ENTREGADOS' }
                     ]}
                     theme={{ colors: { secondaryContainer: theme.primary, onSecondaryContainer: '#fff' } }}
                     style={{ marginBottom: 15 }}
                 />
-                
-                {/* ✨ BARRA DE BÚSQUEDA ✨ */}
                 <Searchbar
                   placeholder="Buscar por email del cliente..."
                   onChangeText={setBusquedaPedido}
@@ -379,7 +425,6 @@ export const AdminScreen = () => {
                   iconColor={theme.primary}
                 />
             </View>
-
             <FlatList 
                 data={pedidosFiltrados} 
                 keyExtractor={(item) => item.id} 
@@ -391,33 +436,23 @@ export const AdminScreen = () => {
                         <View style={styles.orderHeader}>
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.orderEmail}>{item.clienteEmail}</Text>
-                                <Text style={{fontSize: 10, opacity: 0.5, marginTop: 2}}>
-                                    {item.fecha?.toDate ? item.fecha.toDate().toLocaleDateString() : ''} | Pago: {item.metodoPago || 'No asignado'}
-                                </Text>
+                                <Text style={{fontSize: 10, opacity: 0.5, marginTop: 2}}>{item.fecha?.toDate ? item.fecha.toDate().toLocaleDateString() : ''} | Pago: {item.metodoPago}</Text>
                             </View>
                             <View style={{ flexDirection: 'row' }}>
                                 <IconButton icon="pencil-outline" iconColor={theme.primary} size={20} onPress={() => abrirEditorPedido(item)} />
                                 <IconButton icon="trash-can-outline" iconColor="red" size={20} onPress={() => borrarPedido(item.id)} />
                             </View>
                         </View>
-                        
                         <Divider style={{ marginVertical: 10, opacity: 0.2 }} />
-
                         {item.items?.map((prod: any, idx: number) => (<Text key={idx} style={{ fontSize: 13 }}>• {prod.nombre} (x{prod.quantity || 1})</Text>))}
-                        
-                        {item.observacion && (
-                            <Surface style={styles.obsBox} elevation={0}>
-                                <Text style={{ fontSize: 11, fontStyle: 'italic', color: '#856404' }}>📌 Obs: {item.observacion}</Text>
-                            </Surface>
-                        )}
-
+                        {item.observacion && (<Surface style={styles.obsBox} elevation={0}><Text style={{ fontSize: 11, fontStyle: 'italic', color: '#856404' }}>📌 Obs: {item.observacion}</Text></Surface>)}
                         <Text style={styles.orderTotal}>TOTAL: ${item.total}</Text>
                     </Card.Content>
                     <Card.Actions>
                         {item.estado === 'Pendiente' ? (
-                            <Button mode="contained" buttonColor={theme.primary} onPress={() => updateDoc(doc(db, 'pedidos', item.id), { estado: 'Entregado' })}>MARCAR ENTREGADO</Button>
+                            <Button mode="contained" buttonColor={theme.primary} onPress={() => updateDoc(doc(db, 'pedidos', item.id), { estado: 'Entregado' })}>ENTREGAR</Button>
                         ) : (
-                            <Button mode="text" textColor={theme.primary} onPress={() => updateDoc(doc(db, 'pedidos', item.id), { estado: 'Pendiente' })}>VOLVER A PENDIENTE</Button>
+                            <Button mode="text" textColor={theme.primary} onPress={() => updateDoc(doc(db, 'pedidos', item.id), { estado: 'Pendiente' })}>A PENDIENTE</Button>
                         )}
                     </Card.Actions>
                 </Card>
@@ -425,18 +460,46 @@ export const AdminScreen = () => {
         </View>
       )}
 
-      {/* 4. BALANCE */}
-      {vista === 'balance' && (
+      {/* 4. INVENTARIO Y REPORTES (ERP) ✨ */}
+      {vista === 'inventario' && (
         <ScrollView contentContainerStyle={styles.formContainer}>
+          <Text style={{ fontSize: 18, fontWeight: 'bold', color: theme.primary, marginBottom: 20 }}>Rendimiento Comercial</Text>
+          
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 }}>
+              <Card style={[styles.metricCardMini, { flex: 1, marginRight: 5 }]}>
+                  <Card.Content>
+                      <Text style={styles.labelMini}>INGRESOS (BRUTO)</Text>
+                      <Text style={styles.valueMini}>${stats.totalVentas.toLocaleString()}</Text>
+                  </Card.Content>
+              </Card>
+              <Card style={[styles.metricCardMini, { flex: 1, marginLeft: 5, backgroundColor: '#e6f4ea' }]}>
+                  <Card.Content>
+                      <Text style={[styles.labelMini, { color: '#155724' }]}>GANANCIA (NETO)</Text>
+                      <Text style={[styles.valueMini, { color: '#155724' }]}>${stats.gananciaNeta.toLocaleString()}</Text>
+                  </Card.Content>
+              </Card>
+          </View>
+
           <Card style={styles.metricCard}>
-            <Card.Title title="VENTAS ACUMULADAS" subtitle="Pedidos entregados" left={(props) => <IconButton {...props} icon="currency-usd" />} />
-            <Card.Content><Text style={styles.metricValue}>${stats.totalVentas.toLocaleString()}</Text></Card.Content>
+            <Card.Title title="GRÁFICO DE VENTAS" subtitle="Últimos 7 días" left={(props) => <IconButton {...props} icon="chart-bar" />} />
+            <Card.Content>
+                <View style={styles.chartContainer}>
+                    {stats.graficoData.map((bar, i) => (
+                        <View key={i} style={styles.barCol}>
+                            <Text style={styles.barValue}>{bar.valor > 0 ? `$${(bar.valor/1000).toFixed(0)}k` : ''}</Text>
+                            <View style={[styles.barFill, { height: `${Math.max(bar.porcentaje, 2)}%`, backgroundColor: theme.secondary }]} />
+                            <Text style={styles.barLabel}>{bar.label}</Text>
+                        </View>
+                    ))}
+                </View>
+            </Card.Content>
           </Card>
+
           <Card style={styles.metricCard}>
-            <Card.Title title="PRODUCTO ESTRELLA" subtitle="Más pedido" left={(props) => <IconButton {...props} icon="star" />} />
+            <Card.Title title="PRODUCTO ESTRELLA" subtitle="Más pedido histórico" left={(props) => <IconButton {...props} icon="star" />} />
             <Card.Content>
               <Text style={styles.metricValue}>{stats.masVendidoNombre}</Text>
-              <Text style={{opacity:0.5}}>{stats.masVendidoCant} unidades</Text>
+              <Text style={{opacity:0.5}}>{stats.masVendidoCant} unidades vendidas</Text>
             </Card.Content>
           </Card>
         </ScrollView>
@@ -446,14 +509,14 @@ export const AdminScreen = () => {
       {vista === 'config' && (
         <ScrollView contentContainerStyle={styles.formContainer}>
             <Card style={styles.configCard}>
-                <Card.Title title="DATOS DE PAGO" subtitle="Alias para transferencia" />
+                <Card.Title title="DATOS BANCARIOS" subtitle="Alias para transferencia" />
                 <Card.Content>
                     <TextInput label="Alias" value={aliasConfig} onChangeText={setAliasConfig} mode="outlined" style={{marginBottom:10}} />
                     <TextInput label="Titular de la cuenta" value={titularConfig} onChangeText={setTitularConfig} mode="outlined" />
                     <Button mode="contained" style={{marginTop:15}} onPress={async () => {
                         await setDoc(doc(db, 'configuracion', 'pagos'), { alias: aliasConfig, titular: titularConfig }, { merge: true });
                         mostrarAviso("ÉXITO", "Datos de pago actualizados.");
-                    }}>GUARDAR DATOS</Button>
+                    }}>GUARDAR</Button>
                 </Card.Content>
             </Card>
             <Card style={styles.configCard}>
@@ -471,43 +534,19 @@ export const AdminScreen = () => {
 
       {/* PORTALES DE AVISOS Y EDICIÓN */}
       <Portal>
-        {/* Modal de Aviso General */}
         <Dialog visible={avisoVisible} onDismiss={() => setAvisoVisible(false)} style={{ borderRadius: 0, backgroundColor: '#fff' }}>
           <Dialog.Title>{avisoConfig.titulo}</Dialog.Title>
           <Dialog.Content><Text>{avisoConfig.mensaje}</Text></Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setAvisoVisible(false)}>VOLVER</Button>
-            <Button mode="contained" onPress={avisoConfig.accion}>ACEPTAR</Button>
-          </Dialog.Actions>
+          <Dialog.Actions><Button onPress={() => setAvisoVisible(false)}>VOLVER</Button><Button mode="contained" onPress={avisoConfig.accion}>ACEPTAR</Button></Dialog.Actions>
         </Dialog>
 
-        {/* Modal Editor de Pedido */}
         <Dialog visible={modalPedido} onDismiss={() => setModalPedido(false)} style={{ borderRadius: 0, backgroundColor: '#fff' }}>
           <Dialog.Title style={{ color: theme.primary }}>EDITAR PEDIDO</Dialog.Title>
           <Dialog.Content>
-            <TextInput 
-                label="Método de Pago" 
-                value={editPago} 
-                onChangeText={setEditPago} 
-                mode="outlined" 
-                style={{ marginBottom: 15, backgroundColor: '#fff' }} 
-                placeholder="Ej: Transferencia, Efectivo..."
-            />
-            <TextInput 
-                label="Observación Interna" 
-                value={editObs} 
-                onChangeText={setEditObs} 
-                mode="outlined" 
-                multiline 
-                numberOfLines={3}
-                style={{ backgroundColor: '#fff' }} 
-                placeholder="Ej: Retira el viernes a las 18hs."
-            />
+            <TextInput label="Método de Pago" value={editPago} onChangeText={setEditPago} mode="outlined" style={{ marginBottom: 15, backgroundColor: '#fff' }} />
+            <TextInput label="Observación Interna" value={editObs} onChangeText={setEditObs} mode="outlined" multiline numberOfLines={3} style={{ backgroundColor: '#fff' }} />
           </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setModalPedido(false)} textColor={theme.primary}>CANCELAR</Button>
-            <Button mode="contained" onPress={guardarEdicionPedido} loading={cargando} buttonColor={theme.primary}>GUARDAR</Button>
-          </Dialog.Actions>
+          <Dialog.Actions><Button onPress={() => setModalPedido(false)} textColor={theme.primary}>CANCELAR</Button><Button mode="contained" onPress={guardarEdicionPedido} loading={cargando}>GUARDAR</Button></Dialog.Actions>
         </Dialog>
       </Portal>
 
@@ -536,7 +575,7 @@ const styles = StyleSheet.create({
   miniImg: { width: 50, height: 65, marginLeft: 10 },
   badgeStock: { position: 'absolute', top: -5, right: -5 },
   
-  // Estilos de Pedidos Optimizados
+  // Pedidos
   buscador: { backgroundColor: '#fff', borderRadius: 5, elevation: 1 },
   orderCard: { marginBottom: 15, borderLeftWidth: 5, backgroundColor: '#fff', borderRadius: 0 },
   orderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
@@ -544,8 +583,20 @@ const styles = StyleSheet.create({
   orderTotal: { fontSize: 16, fontWeight: 'bold', marginTop: 10, textAlign: 'right' },
   obsBox: { backgroundColor: '#fff3cd', padding: 8, marginTop: 10, borderLeftWidth: 3, borderLeftColor: '#ffeeba' },
 
-  metricCard: { marginBottom: 15, backgroundColor: '#fff' },
+  // Reportes y Gráficos ✨
+  costoCont: { backgroundColor: 'rgba(176,0,32,0.05)', padding: 15, borderRadius: 5, marginBottom: 15, borderLeftWidth: 3, borderLeftColor: '#B00020' },
+  metricCard: { marginBottom: 15, backgroundColor: '#fff', borderRadius: 0 },
   metricValue: { fontSize: 24, fontWeight: 'bold', color: '#002147' },
+  metricCardMini: { backgroundColor: '#fff', borderRadius: 0, elevation: 2 },
+  labelMini: { fontSize: 9, fontWeight: 'bold', opacity: 0.6, letterSpacing: 1 },
+  valueMini: { fontSize: 18, fontWeight: 'bold', marginTop: 5 },
+  
+  chartContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', height: 150, marginTop: 20, borderBottomWidth: 1, borderBottomColor: '#eee', paddingBottom: 5 },
+  barCol: { alignItems: 'center', flex: 1 },
+  barFill: { width: 25, borderTopLeftRadius: 3, borderTopRightRadius: 3 },
+  barLabel: { fontSize: 9, marginTop: 5, fontWeight: 'bold', opacity: 0.5 },
+  barValue: { fontSize: 9, marginBottom: 5, fontWeight: 'bold' },
+
   configCard: { marginBottom: 20, borderLeftWidth: 4, borderLeftColor: '#CFAF68', backgroundColor: '#fff', borderRadius: 0 },
   cuotasRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.03)', padding: 15, marginBottom: 15, borderRadius: 5 },
   fichaCont: { backgroundColor: 'rgba(0,0,0,0.02)', padding: 10, marginBottom: 20 },
