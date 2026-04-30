@@ -6,7 +6,7 @@ import {
 import { 
   Text, TextInput, Button, IconButton, Divider, List, 
   Badge, Card, Surface, Portal, Dialog, Chip, Switch, 
-  Menu, SegmentedButtons 
+  Menu, SegmentedButtons, Searchbar 
 } from 'react-native-paper';
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
@@ -62,6 +62,7 @@ export const AdminScreen = () => {
 
   // ✨ ESTADOS PARA GESTIÓN DE PEDIDOS ✨
   const [filtroPedidos, setFiltroPedidos] = useState('Pendiente');
+  const [busquedaPedido, setBusquedaPedido] = useState(''); // <-- Nuevo estado buscador
   const [modalPedido, setModalPedido] = useState(false);
   const [pedidoSeleccionado, setPedidoSeleccionado] = useState<any>(null);
   const [editPago, setEditPago] = useState('');
@@ -154,6 +155,13 @@ export const AdminScreen = () => {
           setCargando(false);
       }
   };
+
+  // Filtrado de pedidos por estado y buscador
+  const pedidosFiltrados = pedidos.filter(p => {
+    const coincideEstado = p.estado === filtroPedidos;
+    const coincideBusqueda = p.clienteEmail?.toLowerCase().includes(busquedaPedido.toLowerCase());
+    return coincideEstado && coincideBusqueda;
+  });
 
   // --- 👜 FUNCIONES DE PRODUCTOS ---
   const ejecutarGuardado = async () => {
@@ -346,7 +354,7 @@ export const AdminScreen = () => {
         </ScrollView>
       )}
 
-      {/* 3. VISTA PEDIDOS (OPTIMIZADA) ✨ */}
+      {/* 3. VISTA PEDIDOS (CON BUSCADOR Y PESTAÑAS) ✨ */}
       {vista === 'pedidos' && (
         <View style={{ flex: 1 }}>
             <View style={{ padding: 15, paddingBottom: 5 }}>
@@ -358,19 +366,30 @@ export const AdminScreen = () => {
                         { value: 'Entregado', label: 'ENTREGADOS', icon: 'check-all' }
                     ]}
                     theme={{ colors: { secondaryContainer: theme.primary, onSecondaryContainer: '#fff' } }}
+                    style={{ marginBottom: 15 }}
+                />
+                
+                {/* ✨ BARRA DE BÚSQUEDA ✨ */}
+                <Searchbar
+                  placeholder="Buscar por email del cliente..."
+                  onChangeText={setBusquedaPedido}
+                  value={busquedaPedido}
+                  style={styles.buscador}
+                  inputStyle={{ fontSize: 13 }}
+                  iconColor={theme.primary}
                 />
             </View>
 
             <FlatList 
-                data={pedidos.filter(p => p.estado === filtroPedidos)} 
+                data={pedidosFiltrados} 
                 keyExtractor={(item) => item.id} 
                 contentContainerStyle={{ padding: 15 }} 
-                ListEmptyComponent={<Text style={{textAlign: 'center', opacity: 0.5, marginTop: 50}}>No hay pedidos en esta sección.</Text>}
+                ListEmptyComponent={<Text style={{textAlign: 'center', opacity: 0.5, marginTop: 50}}>No se encontraron pedidos.</Text>}
                 renderItem={({ item }) => (
                 <Card style={[styles.orderCard, { borderLeftColor: item.estado === 'Pendiente' ? theme.primary : '#25D366' }]}>
                     <Card.Content>
                         <View style={styles.orderHeader}>
-                            <View>
+                            <View style={{ flex: 1 }}>
                                 <Text style={styles.orderEmail}>{item.clienteEmail}</Text>
                                 <Text style={{fontSize: 10, opacity: 0.5, marginTop: 2}}>
                                     {item.fecha?.toDate ? item.fecha.toDate().toLocaleDateString() : ''} | Pago: {item.metodoPago || 'No asignado'}
@@ -450,7 +469,7 @@ export const AdminScreen = () => {
         </ScrollView>
       )}
 
-      {/* ✨ PORTALES DE AVISOS Y EDICIÓN ✨ */}
+      {/* PORTALES DE AVISOS Y EDICIÓN */}
       <Portal>
         {/* Modal de Aviso General */}
         <Dialog visible={avisoVisible} onDismiss={() => setAvisoVisible(false)} style={{ borderRadius: 0, backgroundColor: '#fff' }}>
@@ -462,7 +481,7 @@ export const AdminScreen = () => {
           </Dialog.Actions>
         </Dialog>
 
-        {/* ✨ Modal Editor de Pedido ✨ */}
+        {/* Modal Editor de Pedido */}
         <Dialog visible={modalPedido} onDismiss={() => setModalPedido(false)} style={{ borderRadius: 0, backgroundColor: '#fff' }}>
           <Dialog.Title style={{ color: theme.primary }}>EDITAR PEDIDO</Dialog.Title>
           <Dialog.Content>
@@ -518,6 +537,7 @@ const styles = StyleSheet.create({
   badgeStock: { position: 'absolute', top: -5, right: -5 },
   
   // Estilos de Pedidos Optimizados
+  buscador: { backgroundColor: '#fff', borderRadius: 5, elevation: 1 },
   orderCard: { marginBottom: 15, borderLeftWidth: 5, backgroundColor: '#fff', borderRadius: 0 },
   orderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   orderEmail: { fontSize: 13, fontWeight: 'bold' },
