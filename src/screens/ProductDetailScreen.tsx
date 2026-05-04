@@ -17,26 +17,26 @@ export const ProductDetailScreen = () => {
 
   const [visible, setVisible] = useState(false);
 
-  // --- ✨ LÓGICA DEL BOTÓN FÍSICO "ATRÁS" (ANDROID) CORREGIDA ✨ ---
+  // --- ✨ LÓGICA DEL BOTÓN FÍSICO "ATRÁS" (ANDROID) ✨ ---
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
         if (navigation.canGoBack()) {
           navigation.goBack();
-          return true;
+          return true; // Detiene la acción por defecto y vuelve atrás en la app
         }
         return false;
       };
 
-      // Guardamos la suscripción
+      // Suscribimos el evento
       const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
 
-      // Limpiamos usando el método .remove() propio de la suscripción
+      // Limpiamos usando el método moderno .remove()
       return () => subscription.remove();
     }, [navigation])
   );
 
-  // Lógica para el carrete de imágenes
+  // Lógica para el carrete de imágenes (Soporta una o varias fotos)
   const listaImagenes = producto.imagenes && producto.imagenes.length > 0 
     ? producto.imagenes 
     : [producto.imagen];
@@ -56,6 +56,7 @@ export const ProductDetailScreen = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
+      {/* Botón Volver Flotante */}
       <IconButton 
         icon="arrow-left" 
         style={[styles.botonVolver, { backgroundColor: theme.background + 'CC' }]} 
@@ -66,6 +67,7 @@ export const ProductDetailScreen = () => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={esWeb ? styles.layoutWeb : styles.layoutMobile}>
           
+          {/* SECCIÓN IMÁGENES */}
           <Surface style={styles.contenedorImagen} elevation={1}>
             <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
               {listaImagenes.map((img: string, index: number) => (
@@ -81,12 +83,14 @@ export const ProductDetailScreen = () => {
             )}
           </Surface>
 
+          {/* SECCIÓN INFORMACIÓN */}
           <View style={styles.infoContainer}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text style={[styles.categoria, { color: theme.secondary }]}>
-                    {producto.categoria.toUpperCase()}
+                    {producto.categoria?.toUpperCase()}
                 </Text>
                 
+                {/* Chip de Stock dinámico */}
                 {tieneStock ? (
                     producto.stock <= 3 && (
                         <Chip icon="alert-decagram" textStyle={{ fontSize: 10, fontWeight: 'bold', color: '#B00020' }} style={{ backgroundColor: '#FFF0F0' }}>
@@ -101,13 +105,14 @@ export const ProductDetailScreen = () => {
             </View>
 
             <Text style={[styles.nombre, { color: theme.primary }]}>
-                {producto.nombre.toUpperCase()}
+                {producto.nombre?.toUpperCase()}
             </Text>
             <View style={[styles.lineaDecorativa, { backgroundColor: theme.secondary }]} />
             
             <View style={styles.contenedorPrecio}>
                 <Text style={[styles.precio, { color: theme.primary }]}>${producto.precio}</Text>
                 
+                {/* Información de Cuotas (Si están habilitadas) */}
                 {producto.enCuotas && (
                     <Surface style={[styles.placaCuotas, { backgroundColor: theme.primary + '08', borderColor: theme.secondary }]} elevation={0}>
                         <IconButton icon="credit-card-outline" iconColor={theme.secondary} size={20} style={{ margin: 0 }} />
@@ -123,24 +128,28 @@ export const ProductDetailScreen = () => {
                 )}
             </View>
 
-            <Text style={[styles.tituloSeccion, { color: theme.primary, marginTop: 20 }]}>DESCRIPCIÓN Y MEDIDAS</Text>
+            <Text style={[styles.tituloSeccion, { color: theme.primary, marginTop: 20 }]}>HISTORIA Y DISEÑO</Text>
             <Text style={[styles.descripcion, { color: theme.text }]}>
               {producto.descripcion || "Diseño exclusivo de la colección ENZIRA Alta Costura."}
             </Text>
             
-            {/* ✨ MOSTRAR FICHA TÉCNICA (Si existe) ✨ */}
-            {producto.medidas && (producto.medidas.alto || producto.medidas.peso) && (
-                <View style={styles.fichaBox}>
-                    {producto.medidas.alto ? <Text style={styles.fichaText}>• Alto: {producto.medidas.alto} cm</Text> : null}
-                    {producto.medidas.ancho ? <Text style={styles.fichaText}>• Ancho: {producto.medidas.ancho} cm</Text> : null}
-                    {producto.medidas.profundidad ? <Text style={styles.fichaText}>• Fuelle: {producto.medidas.profundidad} cm</Text> : null}
-                    {producto.medidas.asa ? <Text style={styles.fichaText}>• Caída de Asa: {producto.medidas.asa} cm</Text> : null}
-                    {producto.medidas.peso ? <Text style={styles.fichaText}>• Peso: {producto.medidas.peso} gr</Text> : null}
+            {/* FICHA TÉCNICA AUTOMATIZADA */}
+            {producto.medidas && (producto.medidas.alto || producto.medidas.peso || producto.medidas.ancho) && (
+                <View style={{ marginTop: 10 }}>
+                    <Text style={[styles.tituloSeccion, { color: theme.primary }]}>FICHA TÉCNICA</Text>
+                    <View style={styles.fichaBox}>
+                        {producto.medidas.alto ? <Text style={styles.fichaText}>• Alto: {producto.medidas.alto} cm</Text> : null}
+                        {producto.medidas.ancho ? <Text style={styles.fichaText}>• Ancho: {producto.medidas.ancho} cm</Text> : null}
+                        {producto.medidas.profundidad ? <Text style={styles.fichaText}>• Fuelle: {producto.medidas.profundidad} cm</Text> : null}
+                        {producto.medidas.asa ? <Text style={styles.fichaText}>• Caída de Asa: {producto.medidas.asa} cm</Text> : null}
+                        {producto.medidas.peso ? <Text style={styles.fichaText}>• Peso: {producto.medidas.peso} gr</Text> : null}
+                    </View>
                 </View>
             )}
 
             <Divider style={styles.divider} />
 
+            {/* BOTÓN DE ACCIÓN DINÁMICO */}
             <Button
               mode="contained"
               onPress={tieneStock ? manejarAgregarAlCarrito : consultarDisponibilidad}
@@ -161,6 +170,7 @@ export const ProductDetailScreen = () => {
         </View>
       </ScrollView>
 
+      {/* AVISO DE PRODUCTO AGREGADO */}
       <Snackbar
         visible={visible}
         onDismiss={() => setVisible(false)}
@@ -195,11 +205,8 @@ const styles = StyleSheet.create({
   montoCuota: { fontSize: 20, fontWeight: 'bold' },
   tituloSeccion: { fontSize: 10, fontWeight: 'bold', letterSpacing: 1, marginBottom: 8 },
   descripcion: { fontSize: 14, lineHeight: 22, opacity: 0.8, marginBottom: 15 },
-  
-  // Estilos de la nueva Ficha Técnica
-  fichaBox: { backgroundColor: 'rgba(0,0,0,0.02)', padding: 15, borderRadius: 5, marginBottom: 30 },
+  fichaBox: { backgroundColor: 'rgba(0,0,0,0.02)', padding: 15, borderRadius: 5, marginBottom: 20, marginTop: 5 },
   fichaText: { fontSize: 12, opacity: 0.6, marginBottom: 4 },
-
   divider: { marginBottom: 30, opacity: 0.1 },
   botonAccion: { borderRadius: 0, paddingVertical: 8 },
   labelBoton: { fontWeight: 'bold', letterSpacing: 2, fontSize: 15 },

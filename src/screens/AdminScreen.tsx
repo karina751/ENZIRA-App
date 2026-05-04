@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   View, StyleSheet, ScrollView, Image, ActivityIndicator, 
-  TouchableOpacity, Platform, FlatList, Dimensions 
+  TouchableOpacity, Platform, FlatList, Dimensions, BackHandler 
 } from 'react-native';
 import { 
   Text, TextInput, Button, IconButton, Divider, List, 
@@ -9,7 +9,7 @@ import {
   Menu, SegmentedButtons, Searchbar 
 } from 'react-native-paper';
 import * as ImagePicker from 'expo-image-picker';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 
 // Firebase y Tema
 import { 
@@ -60,17 +60,39 @@ export const AdminScreen = () => {
   const [asa, setAsa] = useState('');
   const [peso, setPeso] = useState('');
 
-  // Ajustes
+  // Ajustes y Pedidos
   const [aliasConfig, setAliasConfig] = useState('');
   const [titularConfig, setTitularConfig] = useState('');
-
-  // Pedidos
   const [filtroPedidos, setFiltroPedidos] = useState('Pendiente');
   const [busquedaPedido, setBusquedaPedido] = useState('');
   const [modalPedido, setModalPedido] = useState(false);
   const [pedidoSeleccionado, setPedidoSeleccionado] = useState<any>(null);
   const [editPago, setEditPago] = useState('');
   const [editObs, setEditObs] = useState('');
+
+  // --- ✨ LÓGICA DEL BOTÓN FÍSICO "ATRÁS" (ANDROID) ✨ ---
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        // Si no estamos en la lista principal, el botón atrás nos vuelve a la lista
+        if (vista !== 'lista') {
+          setVista('lista');
+          return true; // Bloquea la salida de la pantalla
+        }
+        // Si estamos en la lista, el botón atrás vuelve al Home
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+          return true;
+        }
+        return false;
+      };
+
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+      // Limpiamos usando el método .remove() para evitar errores de TS
+      return () => subscription.remove();
+    }, [vista, navigation])
+  );
 
   // --- 🔥 CARGA DE DATOS REAL TIME ---
   useEffect(() => {
@@ -81,16 +103,16 @@ export const AdminScreen = () => {
     const qProd = query(collection(db, 'productos'), orderBy('fechaCreacion', 'desc'));
     const unsubProd = onSnapshot(qProd, (snap) => {
         const listaTemp: any[] = [];
-        const catsSet = new Set(['Carteras', 'Mochilas', 'Billeteras']); // Base obligatoria
+        const catsSet = new Set(['Carteras', 'Mochilas', 'Billeteras']); 
         
         snap.forEach((docSnap) => {
             const data = docSnap.data();
             listaTemp.push({ id: docSnap.id, ...data });
-            if (data.categoria) catsSet.add(data.categoria); // Recolecta categorías reales
+            if (data.categoria) catsSet.add(data.categoria);
         });
         
         setProductos(listaTemp);
-        setCategoriasExistentes(Array.from(catsSet).sort()); // Actualiza lista
+        setCategoriasExistentes(Array.from(catsSet).sort());
     });
 
     const qOrders = query(collection(db, 'pedidos'), orderBy('fecha', 'desc'));
@@ -199,13 +221,13 @@ export const AdminScreen = () => {
         precio: parseFloat(precio) || 0, 
         costo: parseFloat(costo) || 0,
         stock: parseInt(stock) || 0, 
-        descripcion: descripcion.trim(), // Historia
+        descripcion: descripcion.trim(), 
         categoria: categoriaFinal,
         imagenes: urlsFinales,
         enCuotas,
         cuotasNumero: parseInt(cuotasNumero) || 3,
         cuotasValor: parseFloat(cuotasValor) || 0,
-        medidas: { alto, ancho, profundidad, asa, peso } // Ficha Técnica
+        medidas: { alto, ancho, profundidad, asa, peso }
       };
 
       if (idEdicion) await updateDoc(doc(db, 'productos', idEdicion), payload);
@@ -229,7 +251,11 @@ export const AdminScreen = () => {
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <Surface style={[styles.header, { backgroundColor: theme.background }]} elevation={1}>
-        <IconButton icon="arrow-left" iconColor={theme.primary} onPress={() => navigation.goBack()} />
+        <IconButton 
+            icon="arrow-left" 
+            iconColor={theme.primary} 
+            onPress={() => vista !== 'lista' ? setVista('lista') : navigation.goBack()} 
+        />
         <View style={styles.headerCentral}>
             <Text style={[styles.tituloHeader, { color: theme.primary }]}>GESTIÓN DIRECTIVA</Text>
             <Text style={styles.subtituloHeader}>{vista.toUpperCase()}</Text>
@@ -282,7 +308,7 @@ export const AdminScreen = () => {
         )} />
       )}
 
-      {/* 2. FORMULARIO PRODUCTO ✨ (EDICIÓN COMPLETA) */}
+      {/* 2. FORMULARIO PRODUCTO ✨ */}
       {vista === 'formulario' && (
         <ScrollView contentContainerStyle={styles.formContainer} keyboardShouldPersistTaps="handled">
           <Text style={styles.labelForm}>FOTOS (TOCÁ PORTADA ⭐)</Text>
@@ -299,7 +325,6 @@ export const AdminScreen = () => {
           
           <TextInput label="Nombre del Artículo" value={nombre} onChangeText={setNombre} mode="outlined" style={styles.input} />
           
-          {/* SELECTOR DE CATEGORÍAS DINÁMICO */}
           <Text style={styles.labelForm}>CATEGORÍA</Text>
           <View style={styles.contenedorCategorias}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -309,7 +334,7 @@ export const AdminScreen = () => {
                 <Chip selected={categoria === 'OTRA'} onPress={() => setCategoria('OTRA')} style={[styles.chipCat, { backgroundColor: categoria === 'OTRA' ? theme.primary : '#f0f0f0' }]} selectedColor="#fff" icon="plus">OTRA</Chip>
             </ScrollView>
           </View>
-          {categoria === 'OTRA' && <TextInput label="Nombre de nueva categoría" value={categoriaPersonalizada} onChangeText={setCategoriaPersonalizada} mode="outlined" style={styles.input} />}
+          {categoria === 'OTRA' && <TextInput label="Nueva categoría" value={categoriaPersonalizada} onChangeText={setCategoriaPersonalizada} mode="outlined" style={styles.input} />}
 
           <Surface style={styles.costoCont} elevation={1}>
               <Text style={{fontSize: 10, fontWeight: 'bold', color: '#B00020', marginBottom: 10}}>FINANZAS PRIVADAS</Text>
@@ -321,9 +346,8 @@ export const AdminScreen = () => {
 
           <TextInput label="Stock Actual" value={stock} onChangeText={setStock} keyboardType="numeric" mode="outlined" style={styles.input} />
 
-          {/* ✨ SECTOR CUOTAS RECUPERADO ✨ */}
           <Surface style={styles.cuotasRow} elevation={0}>
-              <View style={{ flex: 1 }}><Text style={{ fontWeight: 'bold', fontSize: 13, color: theme.primary }}>HABILITAR CUOTAS</Text></View>
+              <View style={{ flex: 1 }}><Text style={{ fontWeight: 'bold', fontSize: 13, color: theme.primary }}>CUOTAS</Text></View>
               <Switch value={enCuotas} onValueChange={setEnCuotas} color={theme.secondary} />
           </Surface>
           {enCuotas && (
@@ -333,10 +357,8 @@ export const AdminScreen = () => {
             </View>
           )}
 
-          <Text style={styles.labelForm}>HISTORIA / DISEÑO (DESCRIPCIÓN)</Text>
-          <TextInput placeholder="Relatá los detalles que hacen única a esta pieza..." value={descripcion} onChangeText={setDescripcion} mode="outlined" multiline numberOfLines={3} style={styles.input} />
+          <TextInput label="Historia / Diseño" value={descripcion} onChangeText={setDescripcion} mode="outlined" multiline numberOfLines={3} style={styles.input} />
 
-          {/* ✨ SECTOR FICHA TÉCNICA ✨ */}
           <Text style={styles.labelForm}>FICHA TÉCNICA (NÚMEROS)</Text>
           <Surface style={styles.fichaCont} elevation={0}>
               <View style={styles.filaFicha}>
@@ -345,19 +367,19 @@ export const AdminScreen = () => {
                   <TextInput label="Fuelle" value={profundidad} onChangeText={setProfundidad} keyboardType="numeric" mode="outlined" style={styles.inputFicha} />
               </View>
               <View style={styles.filaFicha}>
-                  <TextInput label="Asa (caída)" value={asa} onChangeText={setAsa} keyboardType="numeric" mode="outlined" style={{ flex: 1, marginRight: 10, backgroundColor: '#fff' }} />
-                  <TextInput label="Peso (gr)" value={peso} onChangeText={setPeso} keyboardType="numeric" mode="outlined" style={{ flex: 1, backgroundColor: '#fff' }} />
+                  <TextInput label="Asa" value={asa} onChangeText={setAsa} keyboardType="numeric" mode="outlined" style={{ flex: 1, marginRight: 10 }} />
+                  <TextInput label="Peso" value={peso} onChangeText={setPeso} keyboardType="numeric" mode="outlined" style={{ flex: 1 }} />
               </View>
           </Surface>
 
           <Button mode="contained" onPress={ejecutarGuardado} loading={cargando} style={styles.btnMain} buttonColor={theme.primary} textColor="#fff">
-            {idEdicion ? "ACTUALIZAR" : "PUBLICAR"}
+            {idEdicion ? "ACTUALIZAR" : "PUBLI CAR"}
           </Button>
           <Button mode="text" onPress={limpiarYSalir}>CANCELAR</Button>
         </ScrollView>
       )}
 
-      {/* 3. VISTA PEDIDOS Y AJUSTES (Sin cambios de lógica) */}
+      {/* 3. VISTA PEDIDOS */}
       {vista === 'pedidos' && (
         <View style={{ flex: 1 }}>
             <View style={{ padding: 15, paddingBottom: 5 }}>
@@ -379,9 +401,41 @@ export const AdminScreen = () => {
                         {item.observacion && (<View style={styles.obsBox}><Text style={{ fontSize: 11, fontStyle: 'italic' }}>📌 {item.observacion}</Text></View>)}
                         <Text style={styles.orderTotal}>TOTAL: ${item.total}</Text>
                     </Card.Content>
+                    <Card.Actions>
+                        <Button mode="contained" buttonColor={item.estado === 'Pendiente' ? theme.primary : '#aaa'} onPress={() => updateDoc(doc(db, 'pedidos', item.id), { estado: item.estado === 'Pendiente' ? 'Entregado' : 'Pendiente' })}>
+                            {item.estado === 'Pendiente' ? 'ENTREGAR' : 'REABRIR'}
+                        </Button>
+                    </Card.Actions>
                 </Card>
             )} />
         </View>
+      )}
+
+      {/* 4. INVENTARIO (ERP) */}
+      {vista === 'inventario' && (
+        <ScrollView contentContainerStyle={styles.formContainer}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 }}>
+              <Card style={[styles.metricCardMini, { flex: 1, marginRight: 5 }]}>
+                  <Card.Content><Text style={styles.labelMini}>INGRESOS</Text><Text style={styles.valueMini}>${stats.totalVentas.toLocaleString()}</Text></Card.Content>
+              </Card>
+              <Card style={[styles.metricCardMini, { flex: 1, marginLeft: 5, backgroundColor: '#e6f4ea' }]}>
+                  <Card.Content><Text style={styles.labelMini}>GANANCIA</Text><Text style={styles.valueMini}>${stats.gananciaNeta.toLocaleString()}</Text></Card.Content>
+              </Card>
+          </View>
+          <Card style={styles.metricCard}>
+            <Card.Title title="VENTAS SEMANALES" left={(props) => <IconButton {...props} icon="chart-bar" />} />
+            <Card.Content>
+                <View style={styles.chartContainer}>
+                    {stats.graficoData.map((bar, i) => (
+                        <View key={i} style={styles.barCol}>
+                            <View style={[styles.barFill, { height: `${Math.max(bar.porcentaje, 2)}%`, backgroundColor: theme.secondary }]} />
+                            <Text style={styles.barLabel}>{bar.label}</Text>
+                        </View>
+                    ))}
+                </View>
+            </Card.Content>
+          </Card>
+        </ScrollView>
       )}
 
       <Portal>
@@ -423,7 +477,7 @@ const styles = StyleSheet.create({
   miniImgContainer: { position: 'relative' },
   miniImg: { width: 50, height: 65, marginLeft: 10 },
   badgeStock: { position: 'absolute', top: -5, right: -5 },
-  contenedorCategorias: { marginBottom: 15, paddingVertical: 5 },
+  contenedorCategorias: { marginBottom: 15 },
   chipCat: { marginRight: 8, backgroundColor: '#CFAF68' },
   orderCard: { marginBottom: 15, borderLeftWidth: 5, backgroundColor: '#fff', borderRadius: 0 },
   orderHeader: { flexDirection: 'row', justifyContent: 'space-between' },
@@ -435,4 +489,12 @@ const styles = StyleSheet.create({
   fichaCont: { backgroundColor: 'rgba(0,0,0,0.02)', padding: 10, marginBottom: 20 },
   filaFicha: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
   inputFicha: { flex: 1, marginHorizontal: 2, backgroundColor: '#fff' },
+  metricCard: { marginBottom: 15, backgroundColor: '#fff' },
+  metricCardMini: { backgroundColor: '#fff' },
+  labelMini: { fontSize: 9, fontWeight: 'bold', opacity: 0.6 },
+  valueMini: { fontSize: 18, fontWeight: 'bold' },
+  chartContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', height: 120, marginTop: 20 },
+  barCol: { alignItems: 'center', flex: 1 },
+  barFill: { width: 20, borderRadius: 3 },
+  barLabel: { fontSize: 8, marginTop: 5 }
 });

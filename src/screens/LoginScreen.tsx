@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Platform, Dimensions, TouchableOpacity, ActivityIndicator, Linking } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react'; // ✨ useCallback sumado
+import { View, StyleSheet, ScrollView, Platform, Dimensions, TouchableOpacity, ActivityIndicator, Linking, BackHandler } from 'react-native'; // ✨ BackHandler sumado
 import { Text, TextInput, Button, IconButton, Snackbar, Portal, Card, Divider, Chip, ProgressBar } from 'react-native-paper';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native'; // ✨ useFocusEffect sumado
 
 // Firebase y Tema
 import { auth, db } from '../services/firebase';
@@ -31,6 +31,24 @@ export const LoginScreen = () => {
   // Estados para avisos
   const [snackVisible, setSnackVisible] = useState(false);
   const [msjSnack, setMsjSnack] = useState('');
+
+  // --- ✨ LÓGICA DEL BOTÓN FÍSICO "ATRÁS" (ANDROID) ✨ ---
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+          return true; // Bloquea la salida de la app y vuelve atrás
+        }
+        return false;
+      };
+
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+      // Limpieza de la suscripción al salir de la pantalla
+      return () => subscription.remove();
+    }, [navigation])
+  );
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, async (currentUser) => {
@@ -101,7 +119,6 @@ export const LoginScreen = () => {
 
   const consultarPedidoWasap = (item: any) => {
     const fecha = item.fecha?.toDate ? item.fecha.toDate().toLocaleDateString() : 'Reciente';
-    // ✨ CAMBIO: AHORA DICE "HOLA ENZIRA"
     const mensaje = `Hola ENZIRA! ✨ Te consulto por mi pedido hecho el ${fecha} por un total de $${item.total}.`;
     Linking.openURL(`https://wa.me/5493873001475?text=${encodeURIComponent(mensaje)}`);
   };
