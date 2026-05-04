@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, Image, Linking, Alert, Dimensions } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react'; // ✨ Sumamos useCallback
+import { View, StyleSheet, FlatList, Image, Linking, Alert, Dimensions, BackHandler } from 'react-native'; // ✨ Sumamos BackHandler
 import { Text, Button, IconButton, Surface, Portal, Dialog, SegmentedButtons, Divider } from 'react-native-paper';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native'; // ✨ Sumamos useFocusEffect
 import { useCart } from '../context/CartContext';
 
 // Firebase
@@ -20,6 +20,25 @@ export const CartScreen = () => {
   const [avisoVisible, setAvisoVisible] = useState(false);
   const [metodoPago, setMetodoPago] = useState('transferencia');
   const [datosPagos, setDatosPagos] = useState({ alias: 'Cargando...', titular: '' });
+
+  // --- ✨ LÓGICA DEL BOTÓN FÍSICO "ATRÁS" (ANDROID) ✨ ---
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (navigation.canGoBack()) {
+          navigation.goBack();
+          return true; // Detiene la acción por defecto (salir de la app)
+        }
+        return false;
+      };
+
+      // Suscribimos el evento
+      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+      // Limpiamos usando el método .remove() moderno
+      return () => subscription.remove();
+    }, [navigation])
+  );
 
   // Escuchar Datos de Pago de Firebase
   useEffect(() => {
@@ -79,7 +98,6 @@ export const CartScreen = () => {
     mensaje += `\n_Pedido enviado desde la App_`;
 
     try {
-      // 1. Guardar en Base de Datos
       await addDoc(collection(db, 'pedidos'), {
         clienteEmail: usuarioActual.email,
         clienteUid: usuarioActual.uid,
@@ -90,11 +108,8 @@ export const CartScreen = () => {
         fecha: new Date()
       });
 
-      // 2. Abrir WhatsApp
       const url = `https://wa.me/5493873001475?text=${encodeURIComponent(mensaje)}`;
       await Linking.openURL(url);
-
-      // 3. ✨ MOSTRAR AVISO DE ÉXITO ✨
       setAvisoVisible(true);
 
     } catch (e) {
@@ -102,7 +117,6 @@ export const CartScreen = () => {
     }
   };
 
-  // Función para limpiar y volver al inicio
   const cerrarYVolver = () => {
       setAvisoVisible(false);
       clearCart();
@@ -111,7 +125,6 @@ export const CartScreen = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
-      {/* Header */}
       <View style={styles.header}>
           <IconButton icon="arrow-left" iconColor={theme.primary} onPress={() => navigation.goBack()} />
           <Text style={[styles.tituloHeader, { color: theme.primary }]}>MI CARRITO</Text>
@@ -136,7 +149,6 @@ export const CartScreen = () => {
             <IconButton icon="trash-can-outline" iconColor="#B00020" size={20} onPress={() => removeFromCart(item.id)} />
           </Surface>
         )}
-        // ✨ SOLUCIÓN AL ERROR DE PANTALLA VACÍA ✨
         ListEmptyComponent={
             <View style={styles.vacioCont}>
                 <IconButton icon="cart-outline" size={80} iconColor={theme.primary} style={{ opacity: 0.2 }} />
@@ -195,7 +207,6 @@ export const CartScreen = () => {
         </Surface>
       )}
 
-      {/* ✨ PORTAL DE DIÁLOGO DE ÉXITO ✨ */}
       <Portal>
         <Dialog visible={avisoVisible} onDismiss={cerrarYVolver} style={{ borderRadius: 0, backgroundColor: '#fff' }}>
           <Dialog.Title style={{ color: theme.primary, letterSpacing: 2 }}>¡PEDIDO ENVIADO! ✨</Dialog.Title>
@@ -227,8 +238,6 @@ const styles = StyleSheet.create({
   precioUnitario: { fontSize: 12, color: '#CFAF68', fontWeight: 'bold' },
   controlesCantidad: { flexDirection: 'row', alignItems: 'center', marginLeft: -10, marginTop: 5 },
   cantidadTexto: { fontSize: 14, fontWeight: 'bold' },
-  
-  // Footer y Pagos
   footer: { position: 'absolute', bottom: 0, width: '100%', backgroundColor: '#fff', padding: 20, borderTopLeftRadius: 20, borderTopRightRadius: 20 },
   filaFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#eee', paddingTop: 15 },
   labelTotal: { fontSize: 10, fontWeight: 'bold', opacity: 0.5 },
@@ -237,8 +246,6 @@ const styles = StyleSheet.create({
   seccionPago: { marginBottom: 15 },
   tituloPago: { fontSize: 10, fontWeight: 'bold', opacity: 0.5, marginBottom: 10, letterSpacing: 1 },
   infoPagoBox: { padding: 10, backgroundColor: 'rgba(0,0,0,0.03)', borderLeftWidth: 3, borderLeftColor: '#CFAF68' },
-
-  // ✨ Estilos de Pantalla Vacía ✨
   vacioCont: { flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 100 },
   vacioTexto: { fontSize: 12, fontWeight: 'bold', opacity: 0.4, letterSpacing: 2, marginBottom: 20 },
   btnVolver: { borderRadius: 0, paddingHorizontal: 20 }
