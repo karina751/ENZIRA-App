@@ -20,7 +20,10 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFAED"
       },
-      "package": "com.karina751.enziraapp"
+      "package": "com.karina751.enziraapp",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -33,6 +36,11 @@
           "cameraPermission": "ENZIRA necesita acceso a la cámara para capturar las carteras nuevas al instante."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "0ebd764c-a3cb-4a62-8408-b01d555b1e6c"
+      }
+    }
   }
 }

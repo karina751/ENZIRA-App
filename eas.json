@@ -1,0 +1,31 @@
+{
+  "cli": {
+    "version": ">= 18.10.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyDNoFsZWk_-NB8xqWU4pp05EF4GbytzDEw",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "enzira-bags.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "enzira-bags",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "enzira-bags.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "1012339605995",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:1012339605995:web:df7a13ae4085d319b159ae"
+      }
+    },
+    "production": {
+      "autoIncrement": true
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
