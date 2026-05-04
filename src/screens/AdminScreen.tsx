@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  View, StyleSheet, ScrollView, Image, TouchableOpacity, 
-  Platform, FlatList, Dimensions, BackHandler 
+  View, StyleSheet, ScrollView, Image, ActivityIndicator, 
+  TouchableOpacity, Platform, FlatList, Dimensions, BackHandler 
 } from 'react-native';
 import { 
   Text, TextInput, Button, IconButton, Divider, List, 
@@ -69,6 +69,27 @@ export const AdminScreen = () => {
   const [editPago, setEditPago] = useState('');
   const [editObs, setEditObs] = useState('');
 
+  // --- 🌐 SOLUCIÓN PUNTO 1: BOTÓN ATRÁS EN NAVEGADOR (WEB) ---
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const handleWebBack = () => {
+        if (vista !== 'lista') {
+          setVista('lista');
+          // Empujamos un estado para que el próximo "atrás" no cierre la web de nuevo
+          window.history.pushState(null, "", window.location.href);
+        }
+      };
+
+      // Si cambiamos de vista, agregamos una entrada al historial del navegador
+      if (vista !== 'lista') {
+        window.history.pushState(null, "", window.location.href);
+      }
+
+      window.addEventListener('popstate', handleWebBack);
+      return () => window.removeEventListener('popstate', handleWebBack);
+    }
+  }, [vista]);
+
   // --- 🔥 CARGA DE DATOS ---
   useEffect(() => {
     const unsubEstilo = onSnapshot(doc(db, 'configuracion', 'apariencia'), (docSnap) => {
@@ -79,13 +100,11 @@ export const AdminScreen = () => {
     const unsubProd = onSnapshot(qProd, (snap) => {
         const listaTemp: any[] = [];
         const catsSet = new Set(['Carteras', 'Mochilas', 'Billeteras']); 
-        
         snap.forEach((docSnap) => {
             const data = docSnap.data();
             listaTemp.push({ id: docSnap.id, ...data });
             if (data.categoria) catsSet.add(data.categoria);
         });
-        
         setProductos(listaTemp);
         setCategoriasExistentes(Array.from(catsSet).sort());
     });
@@ -110,15 +129,12 @@ export const AdminScreen = () => {
   // --- 📊 ESTADÍSTICAS ---
   const obtenerEstadisticas = () => {
     const entregados = pedidos.filter(p => p.estado === 'Entregado');
-    let totalVentas = 0;
-    let totalCostos = 0;
-    const conteoProd: Record<string, number> = {};
+    let totalVentas = 0; let totalCostos = 0;
     const ventasPorDia: Record<string, number> = {};
     const hoy = new Date();
 
     for (let i = 6; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(hoy.getDate() - i);
+        const d = new Date(); d.setDate(hoy.getDate() - i);
         ventasPorDia[d.toLocaleDateString('es-AR', { weekday: 'short' })] = 0;
     }
 
@@ -129,21 +145,17 @@ export const AdminScreen = () => {
           if (ventasPorDia[diaStr] !== undefined) ventasPorDia[diaStr] += (parseFloat(p.total) || 0);
       }
       p.items?.forEach((item: any) => {
-        conteoProd[item.nombre] = (conteoProd[item.nombre] || 0) + (item.quantity || 1);
         const costoUnit = item.costo ? parseFloat(item.costo) : (item.precio * 0.5);
         totalCostos += (costoUnit * (item.quantity || 1));
       });
     });
 
-    const masVendido = Object.entries(conteoProd).sort((a, b) => b[1] - a[1])[0] || ["Ninguno", 0];
     const maxVenta = Math.max(...Object.values(ventasPorDia), 1);
     const graficoData = Object.keys(ventasPorDia).map(dia => ({
-        label: dia.toUpperCase(),
-        valor: ventasPorDia[dia],
-        porcentaje: (ventasPorDia[dia] / maxVenta) * 100
+        label: dia.toUpperCase(), valor: ventasPorDia[dia], porcentaje: (ventasPorDia[dia] / maxVenta) * 100
     }));
 
-    return { totalVentas, gananciaNeta: totalVentas - totalCostos, masVendidoNombre: String(masVendido[0]), masVendidoCant: Number(masVendido[1]), graficoData };
+    return { totalVentas, gananciaNeta: totalVentas - totalCostos, graficoData };
   };
 
   const stats = obtenerEstadisticas();
@@ -151,15 +163,15 @@ export const AdminScreen = () => {
   // --- 🛠️ FUNCIONES ---
   const cambiarVista = (nuevaVista: string) => { setVista(nuevaVista); setMenuVisible(false); };
   
-  const mostrarAviso = (titulo: string, mensaje: string, accion?: () => void, error = false) => {
-    setAvisoConfig({ titulo, mensaje, esError: error, accion: accion ? accion : () => setAvisoVisible(false) });
+  const mostrarAviso = (titulo: string, mensaje: string, accion?: () => void) => {
+    setAvisoConfig({ titulo, mensaje, esError: false, accion: accion ? accion : () => setAvisoVisible(false) });
     setAvisoVisible(true);
   };
 
   const ejecutarGuardado = async () => {
     const categoriaFinal = (categoria === 'OTRA') ? categoriaPersonalizada.trim() : categoria;
     if (!nombre || !precio || imagenes.length === 0 || !categoriaFinal) {
-      mostrarAviso("⚠️ ATENCIÓN", "Faltan datos obligatorios.", undefined, true);
+      mostrarAviso("⚠️ ATENCIÓN", "Faltan datos obligatorios.");
       return;
     }
     setCargando(true);
@@ -177,26 +189,15 @@ export const AdminScreen = () => {
           data.append('upload_preset', 'ENZIRA-bags');
           const cloudRes = await fetch('https://api.cloudinary.com/v1_1/dlwoie6yt/image/upload', { method: 'POST', body: data });
           const file = await cloudRes.json();
-          return file.secure_url.replace('/upload/', '/upload/f_auto,q_auto/');
+          return file.secure_url;
         })
       );
 
-      const urlsFinales = [...urlsSubidas];
-      const [fotoElegida] = urlsFinales.splice(fotoPrincipal, 1);
-      urlsFinales.unshift(fotoElegida);
-
       const payload = { 
-        nombre: nombre.trim(), 
-        precio: parseFloat(precio) || 0, 
-        costo: parseFloat(costo) || 0,
-        stock: parseInt(stock) || 0, 
-        descripcion: descripcion.trim(), 
-        categoria: categoriaFinal,
-        imagenes: urlsFinales,
-        enCuotas,
-        cuotasNumero: parseInt(cuotasNumero) || 3,
-        cuotasValor: parseFloat(cuotasValor) || 0,
-        medidas: { alto, ancho, profundidad, asa, peso }
+        nombre: nombre.trim(), precio: parseFloat(precio) || 0, costo: parseFloat(costo) || 0,
+        stock: parseInt(stock) || 0, descripcion: descripcion.trim(), categoria: categoriaFinal,
+        imagenes: urlsSubidas, enCuotas, cuotasNumero: parseInt(cuotasNumero) || 3,
+        cuotasValor: parseFloat(cuotasValor) || 0, medidas: { alto, ancho, profundidad, asa, peso }
       };
 
       if (idEdicion) await updateDoc(doc(db, 'productos', idEdicion), payload);
@@ -220,7 +221,7 @@ export const AdminScreen = () => {
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <Surface style={[styles.header, { backgroundColor: theme.background }]} elevation={1}>
-        <IconButton icon="arrow-left" iconColor={theme.primary} onPress={() => navigation.goBack()} />
+        <IconButton icon="arrow-left" iconColor={theme.primary} onPress={() => vista !== 'lista' ? setVista('lista') : navigation.goBack()} />
         <View style={styles.headerCentral}>
             <Text style={[styles.tituloHeader, { color: theme.primary }]}>GESTIÓN DIRECTIVA</Text>
             <Text style={styles.subtituloHeader}>{vista.toUpperCase()}</Text>
@@ -229,8 +230,8 @@ export const AdminScreen = () => {
           visible={menuVisible} 
           onDismiss={() => setMenuVisible(false)} 
           anchor={<IconButton icon="menu" iconColor={theme.primary} onPress={() => setMenuVisible(true)} />}
-          // ✨ SOLUCIÓN PUNTO 3: FORZAR FONDO BLANCO EN EL MENÚ ✨
-          contentStyle={{ backgroundColor: '#ffffff', borderRadius: 8, elevation: 5 }}
+          // ✨ SOLUCIÓN PUNTO 3: MENÚ OPACO ✨
+          contentStyle={{ backgroundColor: '#ffffff', borderRadius: 8, elevation: 10, shadowColor: '#000', shadowOpacity: 0.2 }}
         >
           <Menu.Item leadingIcon="package-variant" onPress={() => cambiarVista('lista')} title="Ver Stock" />
           <Menu.Item leadingIcon="plus-circle-outline" onPress={() => cambiarVista('formulario')} title="Nuevo / Editar" />
@@ -251,7 +252,7 @@ export const AdminScreen = () => {
                 left={() => (
                   <View style={styles.miniImgContainer}>
                     <Image source={{ uri: item.imagenes ? item.imagenes[0] : item.imagen }} style={styles.miniImg} />
-                    {(item.stock <= 3) && <Badge style={[styles.badgeStock, { backgroundColor: item.stock === 0 ? '#B00020' : theme.secondary, color: theme.primary }]}>{item.stock}</Badge>}
+                    {(item.stock <= 3) && <Badge style={[styles.badgeStock, { backgroundColor: item.stock === 0 ? '#B00020' : theme.secondary }]}>{item.stock}</Badge>}
                   </View>
                 )}
                 right={() => (
@@ -259,8 +260,7 @@ export const AdminScreen = () => {
                     <IconButton icon="pencil-outline" iconColor={theme.primary} onPress={() => {
                         setIdEdicion(item.id); setNombre(item.nombre); setPrecio(item.precio.toString());
                         setCosto(item.costo?.toString() || ''); setStock(item.stock?.toString() || '0'); setDescripcion(item.descripcion || '');
-                        setImagenes(item.imagenes || [item.imagen]); setFotoPrincipal(0);
-                        setAlto(item.medidas?.alto || ''); setAncho(item.medidas?.ancho || '');
+                        setImagenes(item.imagenes || [item.imagen]); setAlto(item.medidas?.alto || ''); setAncho(item.medidas?.ancho || '');
                         setProfundidad(item.medidas?.profundidad || ''); setAsa(item.medidas?.asa || ''); setPeso(item.medidas?.peso || '');
                         setEnCuotas(item.enCuotas || false); setCuotasNumero(item.cuotasNumero?.toString() || '3'); setCuotasValor(item.cuotasValor?.toString() || '');
                         setCategoria(item.categoria); setVista('formulario');
@@ -275,7 +275,7 @@ export const AdminScreen = () => {
         )} />
       )}
 
-      {/* 2. FORMULARIO PRODUCTO ✨ */}
+      {/* 2. FORMULARIO PRODUCTO */}
       {vista === 'formulario' && (
         <ScrollView contentContainerStyle={styles.formContainer} keyboardShouldPersistTaps="handled">
           <Text style={styles.labelForm}>FOTOS (TOCÁ PORTADA ⭐)</Text>
@@ -288,7 +288,7 @@ export const AdminScreen = () => {
               </TouchableOpacity>
             ))}
             {imagenes.length < 3 && <TouchableOpacity onPress={async () => {
-                let res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [3, 4], quality: 0.7 });
+                let res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, aspect: [3, 4], quality: 0.7 });
                 if (!res.canceled) setImagenes([...imagenes, res.assets[0].uri]);
             }} style={styles.btnAgregarImg}><IconButton icon="camera-plus" iconColor={theme.primary} /></TouchableOpacity>}
           </View>
@@ -299,9 +299,9 @@ export const AdminScreen = () => {
           <View style={styles.contenedorCategorias}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 {categoriasExistentes.map((cat) => (
-                    <Chip key={cat} selected={categoria === cat} onPress={() => { setCategoria(cat); setCategoriaPersonalizada(''); }} style={styles.chipCat} selectedColor="#fff" textStyle={{ fontSize: 11 }}>{cat.toUpperCase()}</Chip>
+                    <Chip key={cat} selected={categoria === cat} onPress={() => { setCategoria(cat); setCategoriaPersonalizada(''); }} style={styles.chipCat} selectedColor="#fff">{cat.toUpperCase()}</Chip>
                 ))}
-                <Chip selected={categoria === 'OTRA'} onPress={() => setCategoria('OTRA')} style={[styles.chipCat, { backgroundColor: categoria === 'OTRA' ? theme.primary : '#f0f0f0' }]} selectedColor="#fff" icon="plus">OTRA</Chip>
+                <Chip selected={categoria === 'OTRA'} onPress={() => setCategoria('OTRA')} icon="plus">OTRA</Chip>
             </ScrollView>
           </View>
           {categoria === 'OTRA' && <TextInput label="Nueva categoría" value={categoriaPersonalizada} onChangeText={setCategoriaPersonalizada} mode="outlined" style={styles.input} />}
@@ -337,8 +337,8 @@ export const AdminScreen = () => {
                   <TextInput label="Fuelle" value={profundidad} onChangeText={setProfundidad} keyboardType="numeric" mode="outlined" style={styles.inputFicha} />
               </View>
               <View style={styles.filaFicha}>
-                  <TextInput label="Asa (caída)" value={asa} onChangeText={setAsa} keyboardType="numeric" mode="outlined" style={{ flex: 1, marginRight: 10, backgroundColor: '#fff' }} />
-                  <TextInput label="Peso (gr)" value={peso} onChangeText={setPeso} keyboardType="numeric" mode="outlined" style={{ flex: 1, backgroundColor: '#fff' }} />
+                  <TextInput label="Asa" value={asa} onChangeText={setAsa} keyboardType="numeric" mode="outlined" style={{ flex: 1, marginRight: 10, backgroundColor: '#fff' }} />
+                  <TextInput label="Peso" value={peso} onChangeText={setPeso} keyboardType="numeric" mode="outlined" style={{ flex: 1, backgroundColor: '#fff' }} />
               </View>
           </Surface>
 
@@ -352,7 +352,7 @@ export const AdminScreen = () => {
       {/* 3. VISTA PEDIDOS */}
       {vista === 'pedidos' && (
         <View style={{ flex: 1 }}>
-            <View style={{ padding: 15, paddingBottom: 5 }}>
+            <View style={{ padding: 15 }}>
                 <SegmentedButtons value={filtroPedidos} onValueChange={setFiltroPedidos} buttons={[{ value: 'Pendiente', label: 'PENDIENTES' }, { value: 'Entregado', label: 'ENTREGADOS' }]} theme={{ colors: { secondaryContainer: theme.primary, onSecondaryContainer: '#fff' } }} style={{ marginBottom: 15 }} />
                 <Searchbar placeholder="Buscar cliente..." onChangeText={setBusquedaPedido} value={busquedaPedido} iconColor={theme.primary} />
             </View>
@@ -371,6 +371,11 @@ export const AdminScreen = () => {
                         {item.observacion && (<View style={styles.obsBox}><Text style={{ fontSize: 11, fontStyle: 'italic' }}>📌 {item.observacion}</Text></View>)}
                         <Text style={styles.orderTotal}>TOTAL: ${item.total}</Text>
                     </Card.Content>
+                    <Card.Actions>
+                        <Button mode="contained" buttonColor={item.estado === 'Pendiente' ? theme.primary : '#aaa'} onPress={() => updateDoc(doc(db, 'pedidos', item.id), { estado: item.estado === 'Pendiente' ? 'Entregado' : 'Pendiente' })}>
+                            {item.estado === 'Pendiente' ? 'ENTREGAR' : 'REABRIR'}
+                        </Button>
+                    </Card.Actions>
                 </Card>
             )} />
         </View>
@@ -407,18 +412,18 @@ export const AdminScreen = () => {
       {vista === 'config' && (
         <ScrollView contentContainerStyle={styles.formContainer}>
             <Card style={styles.configCard}>
-                <Card.Title title="DATOS BANCARIOS" subtitle="Alias para transferencia" />
+                <Card.Title title="DATOS BANCARIOS" subtitle="Configurar Alias de Mariel" />
                 <Card.Content>
                     <TextInput label="Alias" value={aliasConfig} onChangeText={setAliasConfig} mode="outlined" style={{marginBottom:10}} />
                     <TextInput label="Titular de la cuenta" value={titularConfig} onChangeText={setTitularConfig} mode="outlined" />
                     <Button mode="contained" style={{marginTop:15}} onPress={async () => {
                         await setDoc(doc(db, 'configuracion', 'pagos'), { alias: aliasConfig, titular: titularConfig }, { merge: true });
                         mostrarAviso("ÉXITO", "Datos de pago actualizados.");
-                    }} buttonColor={theme.primary}>GUARDAR</Button>
+                    }} buttonColor={theme.primary}>GUARDAR DATOS</Button>
                 </Card.Content>
             </Card>
             <Card style={styles.configCard}>
-                <Card.Title title="ESTÉTICA TEMPORAL" />
+                <Card.Title title="ESTÉTICA TEMPORAL" subtitle="Cambiar estilo de la App" />
                 <Card.Content>
                     <SegmentedButtons
                         value={estacionActual}
@@ -434,7 +439,7 @@ export const AdminScreen = () => {
         <Dialog visible={avisoVisible} onDismiss={() => setAvisoVisible(false)} style={{ backgroundColor: '#fff' }}>
           <Dialog.Title>{avisoConfig.titulo}</Dialog.Title>
           <Dialog.Content><Text>{avisoConfig.mensaje}</Text></Dialog.Content>
-          <Dialog.Actions><Button onPress={() => setAvisoVisible(false)}>VOLVER</Button><Button mode="contained" onPress={avisoConfig.accion}>ACEPTAR</Button></Dialog.Actions>
+          <Dialog.Actions><Button onPress={() => setAvisoVisible(false)}>CERRAR</Button><Button mode="contained" onPress={avisoConfig.accion}>ACEPTAR</Button></Dialog.Actions>
         </Dialog>
         <Dialog visible={modalPedido} onDismiss={() => setModalPedido(false)} style={{ backgroundColor: '#fff' }}>
           <Dialog.Title>EDITAR PEDIDO</Dialog.Title>
@@ -489,7 +494,5 @@ const styles = StyleSheet.create({
   barCol: { alignItems: 'center', flex: 1 },
   barFill: { width: 20, borderRadius: 3 },
   barLabel: { fontSize: 8, marginTop: 5 },
-  
-  // Estilos de la sección Ajustes
   configCard: { marginBottom: 20, borderLeftWidth: 4, borderLeftColor: '#CFAF68', backgroundColor: '#fff', borderRadius: 0 },
 });
