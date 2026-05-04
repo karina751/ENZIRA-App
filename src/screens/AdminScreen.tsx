@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  View, StyleSheet, ScrollView, Image, ActivityIndicator, 
-  TouchableOpacity, Platform, FlatList, Dimensions, BackHandler 
+  View, StyleSheet, ScrollView, Image, TouchableOpacity, 
+  Platform, FlatList, Dimensions, BackHandler 
 } from 'react-native';
 import { 
   Text, TextInput, Button, IconButton, Divider, List, 
@@ -35,7 +35,6 @@ export const AdminScreen = () => {
   const [avisoVisible, setAvisoVisible] = useState(false);
   const [avisoConfig, setAvisoConfig] = useState({ titulo: '', mensaje: '', esError: false, accion: () => {} });
 
-  // ✨ ESTADO PARA CATEGORÍAS DINÁMICAS ✨
   const [categoriasExistentes, setCategoriasExistentes] = useState<string[]>(['Carteras', 'Mochilas', 'Billeteras']);
 
   // Formulario Producto
@@ -44,7 +43,7 @@ export const AdminScreen = () => {
   const [precio, setPrecio] = useState('');
   const [costo, setCosto] = useState(''); 
   const [stock, setStock] = useState(''); 
-  const [descripcion, setDescripcion] = useState(''); // Historia del producto
+  const [descripcion, setDescripcion] = useState(''); 
   const [categoria, setCategoria] = useState('Carteras'); 
   const [categoriaPersonalizada, setCategoriaPersonalizada] = useState(''); 
   const [imagenes, setImagenes] = useState<string[]>([]);
@@ -53,7 +52,7 @@ export const AdminScreen = () => {
   const [cuotasNumero, setCuotasNumero] = useState('3'); 
   const [cuotasValor, setCuotasValor] = useState('');
   
-  // ✨ ESTADOS FICHA TÉCNICA ✨
+  // Ficha Técnica
   const [alto, setAlto] = useState('');
   const [ancho, setAncho] = useState('');
   const [profundidad, setProfundidad] = useState('');
@@ -70,31 +69,7 @@ export const AdminScreen = () => {
   const [editPago, setEditPago] = useState('');
   const [editObs, setEditObs] = useState('');
 
-  // --- ✨ LÓGICA DEL BOTÓN FÍSICO "ATRÁS" (ANDROID) ✨ ---
-  useFocusEffect(
-    useCallback(() => {
-      const onBackPress = () => {
-        // Si no estamos en la lista principal, el botón atrás nos vuelve a la lista
-        if (vista !== 'lista') {
-          setVista('lista');
-          return true; // Bloquea la salida de la pantalla
-        }
-        // Si estamos en la lista, el botón atrás vuelve al Home
-        if (navigation.canGoBack()) {
-          navigation.goBack();
-          return true;
-        }
-        return false;
-      };
-
-      const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-
-      // Limpiamos usando el método .remove() para evitar errores de TS
-      return () => subscription.remove();
-    }, [vista, navigation])
-  );
-
-  // --- 🔥 CARGA DE DATOS REAL TIME ---
+  // --- 🔥 CARGA DE DATOS ---
   useEffect(() => {
     const unsubEstilo = onSnapshot(doc(db, 'configuracion', 'apariencia'), (docSnap) => {
       if (docSnap.exists()) setEstacionActual(docSnap.data().estacionActual);
@@ -181,12 +156,6 @@ export const AdminScreen = () => {
     setAvisoVisible(true);
   };
 
-  const seleccionarImagen = async () => {
-    if (imagenes.length >= 3) { mostrarAviso("ENZIRA", "Máximo 3 fotos."); return; }
-    let res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [3, 4], quality: 0.7 });
-    if (!res.canceled) setImagenes([...imagenes, res.assets[0].uri]);
-  };
-
   const ejecutarGuardado = async () => {
     const categoriaFinal = (categoria === 'OTRA') ? categoriaPersonalizada.trim() : categoria;
     if (!nombre || !precio || imagenes.length === 0 || !categoriaFinal) {
@@ -251,11 +220,7 @@ export const AdminScreen = () => {
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <Surface style={[styles.header, { backgroundColor: theme.background }]} elevation={1}>
-        <IconButton 
-            icon="arrow-left" 
-            iconColor={theme.primary} 
-            onPress={() => vista !== 'lista' ? setVista('lista') : navigation.goBack()} 
-        />
+        <IconButton icon="arrow-left" iconColor={theme.primary} onPress={() => navigation.goBack()} />
         <View style={styles.headerCentral}>
             <Text style={[styles.tituloHeader, { color: theme.primary }]}>GESTIÓN DIRECTIVA</Text>
             <Text style={styles.subtituloHeader}>{vista.toUpperCase()}</Text>
@@ -264,6 +229,8 @@ export const AdminScreen = () => {
           visible={menuVisible} 
           onDismiss={() => setMenuVisible(false)} 
           anchor={<IconButton icon="menu" iconColor={theme.primary} onPress={() => setMenuVisible(true)} />}
+          // ✨ SOLUCIÓN PUNTO 3: FORZAR FONDO BLANCO EN EL MENÚ ✨
+          contentStyle={{ backgroundColor: '#ffffff', borderRadius: 8, elevation: 5 }}
         >
           <Menu.Item leadingIcon="package-variant" onPress={() => cambiarVista('lista')} title="Ver Stock" />
           <Menu.Item leadingIcon="plus-circle-outline" onPress={() => cambiarVista('formulario')} title="Nuevo / Editar" />
@@ -320,7 +287,10 @@ export const AdminScreen = () => {
                 <IconButton icon="close-circle" size={18} iconColor="red" style={styles.btnBorrarImg} onPress={() => { const nl = [...imagenes]; nl.splice(index,1); setImagenes(nl); }} />
               </TouchableOpacity>
             ))}
-            {imagenes.length < 3 && <TouchableOpacity onPress={seleccionarImagen} style={styles.btnAgregarImg}><IconButton icon="camera-plus" iconColor={theme.primary} /></TouchableOpacity>}
+            {imagenes.length < 3 && <TouchableOpacity onPress={async () => {
+                let res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [3, 4], quality: 0.7 });
+                if (!res.canceled) setImagenes([...imagenes, res.assets[0].uri]);
+            }} style={styles.btnAgregarImg}><IconButton icon="camera-plus" iconColor={theme.primary} /></TouchableOpacity>}
           </View>
           
           <TextInput label="Nombre del Artículo" value={nombre} onChangeText={setNombre} mode="outlined" style={styles.input} />
@@ -367,13 +337,13 @@ export const AdminScreen = () => {
                   <TextInput label="Fuelle" value={profundidad} onChangeText={setProfundidad} keyboardType="numeric" mode="outlined" style={styles.inputFicha} />
               </View>
               <View style={styles.filaFicha}>
-                  <TextInput label="Asa" value={asa} onChangeText={setAsa} keyboardType="numeric" mode="outlined" style={{ flex: 1, marginRight: 10 }} />
-                  <TextInput label="Peso" value={peso} onChangeText={setPeso} keyboardType="numeric" mode="outlined" style={{ flex: 1 }} />
+                  <TextInput label="Asa (caída)" value={asa} onChangeText={setAsa} keyboardType="numeric" mode="outlined" style={{ flex: 1, marginRight: 10, backgroundColor: '#fff' }} />
+                  <TextInput label="Peso (gr)" value={peso} onChangeText={setPeso} keyboardType="numeric" mode="outlined" style={{ flex: 1, backgroundColor: '#fff' }} />
               </View>
           </Surface>
 
           <Button mode="contained" onPress={ejecutarGuardado} loading={cargando} style={styles.btnMain} buttonColor={theme.primary} textColor="#fff">
-            {idEdicion ? "ACTUALIZAR" : "PUBLI CAR"}
+            {idEdicion ? "ACTUALIZAR" : "PUBLICAR"}
           </Button>
           <Button mode="text" onPress={limpiarYSalir}>CANCELAR</Button>
         </ScrollView>
@@ -401,17 +371,12 @@ export const AdminScreen = () => {
                         {item.observacion && (<View style={styles.obsBox}><Text style={{ fontSize: 11, fontStyle: 'italic' }}>📌 {item.observacion}</Text></View>)}
                         <Text style={styles.orderTotal}>TOTAL: ${item.total}</Text>
                     </Card.Content>
-                    <Card.Actions>
-                        <Button mode="contained" buttonColor={item.estado === 'Pendiente' ? theme.primary : '#aaa'} onPress={() => updateDoc(doc(db, 'pedidos', item.id), { estado: item.estado === 'Pendiente' ? 'Entregado' : 'Pendiente' })}>
-                            {item.estado === 'Pendiente' ? 'ENTREGAR' : 'REABRIR'}
-                        </Button>
-                    </Card.Actions>
                 </Card>
             )} />
         </View>
       )}
 
-      {/* 4. INVENTARIO (ERP) */}
+      {/* 4. INVENTARIO */}
       {vista === 'inventario' && (
         <ScrollView contentContainerStyle={styles.formContainer}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 }}>
@@ -435,6 +400,33 @@ export const AdminScreen = () => {
                 </View>
             </Card.Content>
           </Card>
+        </ScrollView>
+      )}
+
+      {/* ✨ 5. SOLUCIÓN PUNTO 2: SECCIÓN DE AJUSTES RECUPERADA ✨ */}
+      {vista === 'config' && (
+        <ScrollView contentContainerStyle={styles.formContainer}>
+            <Card style={styles.configCard}>
+                <Card.Title title="DATOS BANCARIOS" subtitle="Alias para transferencia" />
+                <Card.Content>
+                    <TextInput label="Alias" value={aliasConfig} onChangeText={setAliasConfig} mode="outlined" style={{marginBottom:10}} />
+                    <TextInput label="Titular de la cuenta" value={titularConfig} onChangeText={setTitularConfig} mode="outlined" />
+                    <Button mode="contained" style={{marginTop:15}} onPress={async () => {
+                        await setDoc(doc(db, 'configuracion', 'pagos'), { alias: aliasConfig, titular: titularConfig }, { merge: true });
+                        mostrarAviso("ÉXITO", "Datos de pago actualizados.");
+                    }} buttonColor={theme.primary}>GUARDAR</Button>
+                </Card.Content>
+            </Card>
+            <Card style={styles.configCard}>
+                <Card.Title title="ESTÉTICA TEMPORAL" />
+                <Card.Content>
+                    <SegmentedButtons
+                        value={estacionActual}
+                        onValueChange={(v: string) => updateDoc(doc(db, 'configuracion', 'apariencia'), { estacionActual: v })}
+                        buttons={[{ value: 'otoño', label: '🍂' }, { value: 'invierno', label: '❄️' }, { value: 'primavera', label: '🌸' }, { value: 'verano', label: '☀️' }]}
+                    />
+                </Card.Content>
+            </Card>
         </ScrollView>
       )}
 
@@ -496,5 +488,8 @@ const styles = StyleSheet.create({
   chartContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', height: 120, marginTop: 20 },
   barCol: { alignItems: 'center', flex: 1 },
   barFill: { width: 20, borderRadius: 3 },
-  barLabel: { fontSize: 8, marginTop: 5 }
+  barLabel: { fontSize: 8, marginTop: 5 },
+  
+  // Estilos de la sección Ajustes
+  configCard: { marginBottom: 20, borderLeftWidth: 4, borderLeftColor: '#CFAF68', backgroundColor: '#fff', borderRadius: 0 },
 });
