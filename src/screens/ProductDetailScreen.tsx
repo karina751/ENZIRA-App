@@ -24,23 +24,20 @@ export const ProductDetailScreen = () => {
   const [verImagenFull, setVerImagenFull] = useState(false);
   const [indiceImagen, setIndiceImagen] = useState(0);
 
-  // --- ✨ LÓGICA DEL BOTÓN FÍSICO "ATRÁS" ACTUALIZADA ✨ ---
+  // --- ✨ LÓGICA DEL BOTÓN FÍSICO "ATRÁS" (ANDROID) ✨ ---
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
-        // Si el zoom está abierto, el botón atrás solo cierra el zoom
         if (verImagenFull) {
           setVerImagenFull(false);
           return true;
         }
-        // Si no, vuelve a la pantalla anterior
         if (navigation.canGoBack()) {
           navigation.goBack();
           return true;
         }
         return false;
       };
-
       const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
       return () => subscription.remove();
     }, [navigation, verImagenFull])
@@ -92,7 +89,6 @@ export const ProductDetailScreen = () => {
         </View>
       </Modal>
 
-      {/* Botón Volver Flotante */}
       <IconButton 
         icon="arrow-left" 
         style={[styles.botonVolver, { backgroundColor: theme.background + 'CC' }]} 
@@ -103,24 +99,31 @@ export const ProductDetailScreen = () => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={esWeb ? styles.layoutWeb : styles.layoutMobile}>
           
-          {/* SECCIÓN IMÁGENES */}
+          {/* SECCIÓN IMÁGENES CORREGIDA */}
           <Surface style={styles.contenedorImagen} elevation={1}>
             <ScrollView 
               horizontal 
               pagingEnabled 
               showsHorizontalScrollIndicator={false}
+              scrollEventThrottle={16}
               onMomentumScrollEnd={(e) => {
-                // Calculamos el índice actual para que el zoom abra la foto correcta
                 const contentOffset = e.nativeEvent.contentOffset.x;
                 const viewSize = e.nativeEvent.layoutMeasurement.width;
-                setIndiceImagen(Math.floor(contentOffset / viewSize));
+                if (viewSize > 0) {
+                  setIndiceImagen(Math.round(contentOffset / viewSize));
+                }
               }}
             >
               {listaImagenes.map((img: string, index: number) => (
                 <TouchableOpacity 
                   key={index} 
-                  activeOpacity={0.9} 
-                  onPress={() => setVerImagenFull(true)}
+                  activeOpacity={1} 
+                  onPress={() => {
+                    setIndiceImagen(index);
+                    setVerImagenFull(true);
+                  }}
+                  // ✨ FIX CRÍTICO: Ancho y alto explícitos para que no colapse ✨
+                  style={{ width: esWeb ? 500 : width, height: '100%' }}
                 >
                   <Image source={{ uri: img }} style={styles.imagen} />
                 </TouchableOpacity>
@@ -142,7 +145,6 @@ export const ProductDetailScreen = () => {
                 <Text style={[styles.categoria, { color: theme.secondary }]}>
                     {producto.categoria?.toUpperCase()}
                 </Text>
-                
                 {tieneStock ? (
                     producto.stock <= 3 && (
                         <Chip icon="alert-decagram" textStyle={{ fontSize: 10, fontWeight: 'bold', color: '#B00020' }} style={{ backgroundColor: '#FFF0F0' }}>
@@ -163,7 +165,6 @@ export const ProductDetailScreen = () => {
             
             <View style={styles.contenedorPrecio}>
                 <Text style={[styles.precio, { color: theme.primary }]}>${producto.precio}</Text>
-                
                 {producto.enCuotas && (
                     <Surface style={[styles.placaCuotas, { backgroundColor: theme.primary + '08', borderColor: theme.secondary }]} elevation={0}>
                         <IconButton icon="credit-card-outline" iconColor={theme.secondary} size={20} style={{ margin: 0 }} />
@@ -210,11 +211,6 @@ export const ProductDetailScreen = () => {
             >
               {tieneStock ? 'AÑADIR AL CARRITO' : 'CONSULTAR REINGRESO'}
             </Button>
-
-            <View style={styles.detallesEnvio}>
-              <Text style={[styles.envioTexto, { color: theme.text }]}>✨ Envío exclusivo a todo el país</Text>
-              <Text style={[styles.envioTexto, { color: theme.text }]}>✨ Calidad Garantizada ENZIRA</Text>
-            </View>
           </View>
         </View>
       </ScrollView>
@@ -234,31 +230,15 @@ export const ProductDetailScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  // --- ESTILOS DEL MODAL DE ZOOM ---
-  modalContainer: { 
-    flex: 1, 
-    backgroundColor: 'rgba(0,0,0,0.9)', 
-    justifyContent: 'center', 
-    alignItems: 'center' 
-  },
-  botonCerrarModal: { 
-    position: 'absolute', 
-    top: Platform.OS === 'ios' ? 50 : 20, 
-    right: 15, 
-    zIndex: 20, 
-    backgroundColor: 'rgba(0,0,0,0.2)' 
-  },
-  imagenFull: { 
-    width: width, 
-    height: height * 0.8, 
-  },
-  
+  modalContainer: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
+  botonCerrarModal: { position: 'absolute', top: Platform.OS === 'ios' ? 50 : 20, right: 15, zIndex: 20, backgroundColor: 'rgba(0,0,0,0.5)' },
+  imagenFull: { width: width, height: height * 0.9 },
   botonVolver: { position: 'absolute', top: Platform.OS === 'ios' ? 50 : 20, left: 10, zIndex: 10 },
   scrollContent: { paddingBottom: 40 },
   layoutMobile: { flexDirection: 'column' },
   layoutWeb: { flexDirection: 'row', padding: 50, justifyContent: 'center', alignItems: 'flex-start' },
   contenedorImagen: { width: esWeb ? 500 : width, height: esWeb ? 500 : width * 1.3, backgroundColor: '#fff', overflow: 'hidden' },
-  imagen: { width: esWeb ? 500 : width, height: '100%', resizeMode: 'cover' },
+  imagen: { width: '100%', height: '100%', resizeMode: 'cover' },
   indicadorContenedor: { position: 'absolute', bottom: 15, right: 15 },
   indicadorTexto: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 15, fontSize: 10, fontWeight: 'bold', overflow: 'hidden' },
   infoContainer: { flex: 1, padding: 30, maxWidth: esWeb ? 500 : '100%' },
@@ -277,6 +257,4 @@ const styles = StyleSheet.create({
   divider: { marginBottom: 30, opacity: 0.1 },
   botonAccion: { borderRadius: 0, paddingVertical: 8 },
   labelBoton: { fontWeight: 'bold', letterSpacing: 2, fontSize: 15 },
-  detallesEnvio: { marginTop: 30 },
-  envioTexto: { fontSize: 12, opacity: 0.5, marginBottom: 5, fontStyle: 'italic' },
 });
