@@ -89,7 +89,7 @@ export const HomeScreen = () => {
     if (!usuario) { 
       navigation.navigate('Login'); 
     } else {
-      setMostrarDialog(true); // Si ya hay usuario, el botón de cuenta dispara el Logout
+      setMostrarDialog(true);
     }
   };
 
@@ -146,7 +146,6 @@ export const HomeScreen = () => {
                   )}
 
                   <View style={styles.rightActions}>
-                    {/* CARRITO */}
                     <View>
                       <IconButton icon="cart" iconColor={theme.primary} onPress={() => navigation.navigate('Cart')} />
                       {totalItems > 0 && (
@@ -156,7 +155,6 @@ export const HomeScreen = () => {
                       )}
                     </View>
 
-                    {/* MIS COMPRAS (Solo si está logueado) */}
                     {usuario && (
                         <IconButton 
                           icon="receipt-text-outline" 
@@ -165,12 +163,10 @@ export const HomeScreen = () => {
                         />
                     )}
                     
-                    {/* ADMIN */}
                     {rol === 'admin' && (
                       <IconButton icon="briefcase" iconColor={theme.secondary} onPress={() => navigation.navigate('Admin')} />
                     )}
                     
-                    {/* PERSONITA / LOGOUT */}
                     <IconButton 
                       icon={usuario ? "logout" : "account-outline"} 
                       iconColor={usuario ? "#B00020" : theme.primary} 
@@ -207,6 +203,13 @@ export const HomeScreen = () => {
                     {item.nombre.toUpperCase()}
                   </Text>
                   <Text style={[styles.precio, { color: theme.text }]}>${item.precio}</Text>
+                  
+                  {/* ✨ ETIQUETA DE CUOTAS PARA EL HOME ✨ */}
+                  {item.enCuotas && (
+                    <Text style={[styles.cuotasTexto, { color: theme.secondary }]}>
+                      {item.cuotasNumero} CUOTAS DE ${item.cuotasValor}
+                    </Text>
+                  )}
                 </View>
               </TouchableOpacity>
             )}
@@ -251,6 +254,10 @@ const styles = StyleSheet.create({
   contenidoTarjeta: { padding: 10, alignItems: 'center' },
   nombreProducto: { fontSize: 11, fontWeight: 'bold' },
   precio: { fontSize: 13, marginTop: 4 },
+  
+  // ✨ NUEVO ESTILO PARA LAS CUOTAS ✨
+  cuotasTexto: { fontSize: 8, fontWeight: 'bold', marginTop: 2, textAlign: 'center', letterSpacing: 0.5 },
+
   badgeEstilo: { position: 'absolute', top: 5, right: 5 },
   footerContainer: { padding: 40, alignItems: 'center' },
   dividerFooter: { width: '40%', marginBottom: 15, opacity: 0.3 },
