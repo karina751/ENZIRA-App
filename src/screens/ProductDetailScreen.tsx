@@ -1,11 +1,14 @@
 import React, { useState, useCallback } from 'react';
-import { View, StyleSheet, Image, ScrollView, Platform, Dimensions, Linking, BackHandler } from 'react-native';
+import { 
+  View, StyleSheet, Image, ScrollView, Platform, Dimensions, 
+  Linking, BackHandler, Modal, TouchableOpacity 
+} from 'react-native';
 import { Text, Button, IconButton, Divider, Surface, Snackbar, Chip } from 'react-native-paper';
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useCart } from '../context/CartContext';
 import { useAppTheme } from '../context/ThemeContext';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 const esWeb = Platform.OS === 'web' && width > 768;
 
 export const ProductDetailScreen = () => {
@@ -16,27 +19,33 @@ export const ProductDetailScreen = () => {
   const { addToCart } = useCart();
 
   const [visible, setVisible] = useState(false);
+  
+  // --- ✨ ESTADOS PARA EL ZOOM ✨ ---
+  const [verImagenFull, setVerImagenFull] = useState(false);
+  const [indiceImagen, setIndiceImagen] = useState(0);
 
-  // --- ✨ LÓGICA DEL BOTÓN FÍSICO "ATRÁS" (ANDROID) ✨ ---
+  // --- ✨ LÓGICA DEL BOTÓN FÍSICO "ATRÁS" ACTUALIZADA ✨ ---
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
+        // Si el zoom está abierto, el botón atrás solo cierra el zoom
+        if (verImagenFull) {
+          setVerImagenFull(false);
+          return true;
+        }
+        // Si no, vuelve a la pantalla anterior
         if (navigation.canGoBack()) {
           navigation.goBack();
-          return true; // Detiene la acción por defecto y vuelve atrás en la app
+          return true;
         }
         return false;
       };
 
-      // Suscribimos el evento
       const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
-
-      // Limpiamos usando el método moderno .remove()
       return () => subscription.remove();
-    }, [navigation])
+    }, [navigation, verImagenFull])
   );
 
-  // Lógica para el carrete de imágenes (Soporta una o varias fotos)
   const listaImagenes = producto.imagenes && producto.imagenes.length > 0 
     ? producto.imagenes 
     : [producto.imagen];
@@ -56,6 +65,33 @@ export const ProductDetailScreen = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
+      
+      {/* --- ✨ MODAL DE ZOOM (PANTALLA COMPLETA) ✨ --- */}
+      <Modal visible={verImagenFull} transparent={true} animationType="fade">
+        <View style={styles.modalContainer}>
+          <IconButton 
+            icon="close" 
+            iconColor="white" 
+            size={30} 
+            style={styles.botonCerrarModal} 
+            onPress={() => setVerImagenFull(false)} 
+          />
+          <ScrollView
+            maximumZoomScale={3} 
+            minimumZoomScale={1}
+            centerContent={true}
+            showsHorizontalScrollIndicator={false}
+            showsVerticalScrollIndicator={false}
+          >
+            <Image 
+              source={{ uri: listaImagenes[indiceImagen] }} 
+              style={styles.imagenFull} 
+              resizeMode="contain" 
+            />
+          </ScrollView>
+        </View>
+      </Modal>
+
       {/* Botón Volver Flotante */}
       <IconButton 
         icon="arrow-left" 
@@ -69,15 +105,32 @@ export const ProductDetailScreen = () => {
           
           {/* SECCIÓN IMÁGENES */}
           <Surface style={styles.contenedorImagen} elevation={1}>
-            <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
+            <ScrollView 
+              horizontal 
+              pagingEnabled 
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={(e) => {
+                // Calculamos el índice actual para que el zoom abra la foto correcta
+                const contentOffset = e.nativeEvent.contentOffset.x;
+                const viewSize = e.nativeEvent.layoutMeasurement.width;
+                setIndiceImagen(Math.floor(contentOffset / viewSize));
+              }}
+            >
               {listaImagenes.map((img: string, index: number) => (
-                <Image key={index} source={{ uri: img }} style={styles.imagen} />
+                <TouchableOpacity 
+                  key={index} 
+                  activeOpacity={0.9} 
+                  onPress={() => setVerImagenFull(true)}
+                >
+                  <Image source={{ uri: img }} style={styles.imagen} />
+                </TouchableOpacity>
               ))}
             </ScrollView>
+            
             {listaImagenes.length > 1 && (
               <View style={styles.indicadorContenedor}>
                  <Text style={[styles.indicadorTexto, { backgroundColor: theme.primary + 'AA', color: theme.onPrimary }]}>
-                    1 / {listaImagenes.length} desliza ➔
+                    {indiceImagen + 1} / {listaImagenes.length} 🔍 Toca para ampliar
                  </Text>
               </View>
             )}
@@ -90,7 +143,6 @@ export const ProductDetailScreen = () => {
                     {producto.categoria?.toUpperCase()}
                 </Text>
                 
-                {/* Chip de Stock dinámico */}
                 {tieneStock ? (
                     producto.stock <= 3 && (
                         <Chip icon="alert-decagram" textStyle={{ fontSize: 10, fontWeight: 'bold', color: '#B00020' }} style={{ backgroundColor: '#FFF0F0' }}>
@@ -112,7 +164,6 @@ export const ProductDetailScreen = () => {
             <View style={styles.contenedorPrecio}>
                 <Text style={[styles.precio, { color: theme.primary }]}>${producto.precio}</Text>
                 
-                {/* Información de Cuotas (Si están habilitadas) */}
                 {producto.enCuotas && (
                     <Surface style={[styles.placaCuotas, { backgroundColor: theme.primary + '08', borderColor: theme.secondary }]} elevation={0}>
                         <IconButton icon="credit-card-outline" iconColor={theme.secondary} size={20} style={{ margin: 0 }} />
@@ -133,7 +184,6 @@ export const ProductDetailScreen = () => {
               {producto.descripcion || "Diseño exclusivo de la colección ENZIRA Alta Costura."}
             </Text>
             
-            {/* FICHA TÉCNICA AUTOMATIZADA */}
             {producto.medidas && (producto.medidas.alto || producto.medidas.peso || producto.medidas.ancho) && (
                 <View style={{ marginTop: 10 }}>
                     <Text style={[styles.tituloSeccion, { color: theme.primary }]}>FICHA TÉCNICA</Text>
@@ -149,7 +199,6 @@ export const ProductDetailScreen = () => {
 
             <Divider style={styles.divider} />
 
-            {/* BOTÓN DE ACCIÓN DINÁMICO */}
             <Button
               mode="contained"
               onPress={tieneStock ? manejarAgregarAlCarrito : consultarDisponibilidad}
@@ -170,7 +219,6 @@ export const ProductDetailScreen = () => {
         </View>
       </ScrollView>
 
-      {/* AVISO DE PRODUCTO AGREGADO */}
       <Snackbar
         visible={visible}
         onDismiss={() => setVisible(false)}
@@ -186,6 +234,25 @@ export const ProductDetailScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  // --- ESTILOS DEL MODAL DE ZOOM ---
+  modalContainer: { 
+    flex: 1, 
+    backgroundColor: 'rgba(0,0,0,0.9)', 
+    justifyContent: 'center', 
+    alignItems: 'center' 
+  },
+  botonCerrarModal: { 
+    position: 'absolute', 
+    top: Platform.OS === 'ios' ? 50 : 20, 
+    right: 15, 
+    zIndex: 20, 
+    backgroundColor: 'rgba(0,0,0,0.2)' 
+  },
+  imagenFull: { 
+    width: width, 
+    height: height * 0.8, 
+  },
+  
   botonVolver: { position: 'absolute', top: Platform.OS === 'ios' ? 50 : 20, left: 10, zIndex: 10 },
   scrollContent: { paddingBottom: 40 },
   layoutMobile: { flexDirection: 'column' },
