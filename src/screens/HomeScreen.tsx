@@ -271,4 +271,4 @@ const styles = StyleSheet.create({
   socialIcons: { flexDirection: 'row', marginVertical: 10 },
   copyright: { fontSize: 8, opacity: 0.3 },
   vacio: { textAlign: 'center', marginTop: 50, opacity: 0.5 }
-});giy
+});

@@ -173,16 +173,20 @@ export const ProductDetailScreen = () => {
                 <Text style={[styles.precio, { color: theme.primary }]}>${producto.precio}</Text>
                 
                 {/* REINSTALACIÓN DE PLACA DE CUOTAS */}
-                {producto.enCuotas && (
-                    <Surface style={[styles.placaCuotas, { backgroundColor: theme.primary + '08', borderColor: theme.secondary }]} elevation={0}>
-                        <IconButton icon="credit-card-outline" iconColor={theme.secondary} size={20} style={{ margin: 0 }} />
-                        <View style={{ flex: 1 }}>
-                            <Text style={[styles.textoCuotas, { color: theme.text }]}>{producto.cuotasNumero} CUOTAS SIN INTERÉS DE</Text>
-                            <Text style={[styles.montoCuota, { color: theme.primary }]}>${producto.cuotasValor}</Text>
-                        </View>
-                    </Surface>
-                )}
-            </View>
+                {/* ✨ ACTUALIZADO: PLACA DE CUOTAS FIJAS ✨ */}
+{producto.enCuotas && (
+    <Surface style={[styles.placaCuotas, { backgroundColor: theme.primary + '08', borderColor: theme.secondary }]} elevation={0}>
+        <IconButton icon="credit-card-outline" iconColor={theme.secondary} size={20} style={{ margin: 0 }} />
+        <View style={{ flex: 1 }}>
+            <Text style={[styles.textoCuotas, { color: theme.text }]}>
+                {producto.cuotasNumero} CUOTAS FIJAS DE
+            </Text>
+            <Text style={[styles.montoCuota, { color: theme.primary }]}>
+                ${producto.cuotasValor}
+            </Text>
+        </View>
+    </Surface>
+)}
 
             <Text style={[styles.tituloSeccion, { color: theme.primary, marginTop: 20 }]}>HISTORIA Y DISEÑO</Text>
             <Text style={[styles.descripcion, { color: theme.text }]}>{producto.descripcion || "Diseño exclusivo ENZIRA."}</Text>
