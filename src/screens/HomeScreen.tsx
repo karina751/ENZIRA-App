@@ -13,8 +13,8 @@ import {
 import { Text, IconButton, TextInput, Divider, Badge, Portal, Dialog, Button } from 'react-native-paper';
 import { useNavigation, useRoute } from '@react-navigation/native'; 
 
-// Firebase, Carrito y Tema
-import { collection, getDocs, query, orderBy, doc, getDoc } from 'firebase/firestore';
+// ✨ IMPORTAMOS onSnapshot PARA ESCUCHA EN TIEMPO REAL ✨
+import { collection, query, orderBy, doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { useCart } from '../context/CartContext';
@@ -41,13 +41,14 @@ export const HomeScreen = () => {
   const esMobile = width < 700;
   const numColumnas = esMobile ? 2 : 4;
 
-  // Lógica de carga
+  // Lógica de carga de categoría
   useEffect(() => {
     if (route.params?.categoriaSeleccionada) {
       setCatSeleccionada(route.params.categoriaSeleccionada);
     }
   }, [route.params?.categoriaSeleccionada, route.params?.lastUpdate]);
 
+  // Lógica de Autenticación
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       setUsuario(user);
@@ -60,20 +61,28 @@ export const HomeScreen = () => {
     return unsub; 
   }, []);
 
-  const obtenerProductos = async () => {
-    try {
-      const q = query(collection(db, 'productos'), orderBy('fechaCreacion', 'desc'));
-      const querySnapshot = await getDocs(q);
+  // ✨ REFACTORIZACIÓN: OBTENER PRODUCTOS EN TIEMPO REAL (onSnapshot) ✨
+  useEffect(() => {
+    const q = query(collection(db, 'productos'), orderBy('fechaCreacion', 'desc'));
+    
+    // onSnapshot se queda escuchando cualquier cambio en Firebase (productos o estilos globales)
+    const unsubscribeProductos = onSnapshot(q, (querySnapshot) => {
       const listaTemp: any[] = [];
       querySnapshot.forEach((doc) => {
         listaTemp.push({ id: doc.id, ...doc.data() });
       });
       setProductos(listaTemp);
-    } catch (error) { console.log(error); } finally { setCargando(false); }
-  };
+      setCargando(false);
+    }, (error) => {
+      console.log("Error en tiempo real:", error);
+      setCargando(false);
+    });
 
-  useEffect(() => { obtenerProductos(); }, []);
+    // Limpiamos la escucha cuando el componente se desmonte
+    return () => unsubscribeProductos();
+  }, []);
 
+  // Filtrado lógico en el cliente
   useEffect(() => {
     let filtrados = productos;
     if (catSeleccionada !== 'Todas') {
@@ -204,10 +213,10 @@ export const HomeScreen = () => {
                   </Text>
                   <Text style={[styles.precio, { color: theme.text }]}>${item.precio}</Text>
                   
-                  {/* ✨ ETIQUETA DE CUOTAS PARA EL HOME ✨ */}
+                  {/* ✨ MODIFICADO: CUOTAS FIJAS CON TEXTO ACTUALIZADO ✨ */}
                   {item.enCuotas && (
                     <Text style={[styles.cuotasTexto, { color: theme.secondary }]}>
-                      {item.cuotasNumero} CUOTAS DE ${item.cuotasValor}
+                      {item.cuotasNumero} CUOTAS FIJAS DE ${item.cuotasValor}
                     </Text>
                   )}
                 </View>
@@ -254,10 +263,7 @@ const styles = StyleSheet.create({
   contenidoTarjeta: { padding: 10, alignItems: 'center' },
   nombreProducto: { fontSize: 11, fontWeight: 'bold' },
   precio: { fontSize: 13, marginTop: 4 },
-  
-  // ✨ NUEVO ESTILO PARA LAS CUOTAS ✨
   cuotasTexto: { fontSize: 8, fontWeight: 'bold', marginTop: 2, textAlign: 'center', letterSpacing: 0.5 },
-
   badgeEstilo: { position: 'absolute', top: 5, right: 5 },
   footerContainer: { padding: 40, alignItems: 'center' },
   dividerFooter: { width: '40%', marginBottom: 15, opacity: 0.3 },
@@ -265,4 +271,4 @@ const styles = StyleSheet.create({
   socialIcons: { flexDirection: 'row', marginVertical: 10 },
   copyright: { fontSize: 8, opacity: 0.3 },
   vacio: { textAlign: 'center', marginTop: 50, opacity: 0.5 }
-})
+});giy
